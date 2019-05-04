@@ -1,4 +1,6 @@
-git config --global user.name "LeeChunJun" 
+// 创建github项目
+
+git config --global user.name "LeeChunJun"
 git config --global user.email 1772043675@qq.com
 cd E:/Notes
 echo "# Notes" >> README.md
@@ -7,3 +9,211 @@ git add README.md
 git commit -m "init commit"
 git remote add origin https://github.com/LeeChunJun/Notes.git
 git push -u origin master
+
+
+// 1.起步——版本控制
+
+关于版本控制：
+1)本地版本控制系统
+2)集中化的版本控制系统
+3)分布式版本控制系统
+
+Git 简史：
+Linux 内核开源社区
+
+Git 基础：
+1)直接记录快照，而非差异比较
+2)近乎所有操作都是本地执行
+3)Git 保证完整性
+4)Git 一般只添加数据
+5)三种状态
+
+    Git 有三种状态：已提交（committed）、已修改（modified）和已暂存（staged）。
+    已提交：表示数据已经安全的保存在本地数据库中。
+    已修改：表示修改了文件，但还没保存到数据库中。
+    已暂存：表示对一个已修改文件的当前版本做了标记，使之包含在下次提交的快照中。
+
+    Git 仓库、工作目录以及暂存区域。
+    1)Git 仓库目录是 Git 用来保存项目的元数据和对象数据库的地方。这是 Git 中最重要的部分，从其它计算机克隆仓库时，拷贝的就是这里的数据。
+    2)工作目录是对项目的某个版本独立提取出来的内容。这些从 Git 仓库的压缩数据库中提取出来的文件，放在磁盘上供你使用或修改。
+    3)暂存区域是一个文件，保存了下次将提交的文件列表信息，一般在 Git 仓库目录中。有时候也被称作‘索引’，不过一般说法还是叫暂存区域。
+
+    基本的 Git 工作流程如下：
+    1)在工作目录中修改文件。
+    2)暂存文件，将文件的快照放入暂存区域。
+    3)提交更新，找到暂存区域的文件，将快照永久性存储到 Git 仓库目录。
+
+    如果 Git 目录中保存着特定版本的文件，就属于已提交状态。 
+    如果作了修改并已放入暂存区域，就属于已暂存状态。
+    如果自上次取出后，作了修改但还没有放到暂存区域，就是已修改状态。
+
+安装 Git：
+1)在 Linux 上安装
+
+    $ sudo yum install git -> Fedora
+    $ sudo apt-get install git -> Debian
+
+2)在 Mac 上安装
+
+    安装 Xcode Command Line Tools
+
+3)在 Windows 上安装
+4)从源代码安装
+
+    $ sudo yum install curl-devel expat-devel gettext-devel \
+        openssl-devel zlib-devel
+    $ sudo apt-get install libcurl4-gnutls-dev libexpat1-dev gettext \
+        libz-dev libssl-dev 
+
+    能够添加更多格式的文档（如 doc, html, info），你需要安装以下的依赖包
+    $ sudo yum install asciidoc xmlto docbook2x
+    $ sudo apt-get install asciidoc xmlto docbook2x
+
+    编译并安装
+    $ tar -zxf git-2.0.0.tar.gz
+    $ cd git-2.0.0
+    $ make configure
+    $ ./configure --prefix=/usr
+    $ make all doc info
+    $ sudo make install install-doc install-html install-info
+
+    完成后，你可以使用 Git 来获取 Git 的升级
+    $ git clone git://git.kernel.org/pub/scm/git/git.git
+
+初次运行 Git 前的配置：
+1)三种配置文件
+
+    /etc/gitconfig 文件: 包含系统上每一个用户及他们仓库的通用配置。 如果使用带有 --system 选项的 git config 时，它会从此文件读写配置变量。
+    ~/.gitconfig 或 ~/.config/git/config 文件：只针对当前用户。 可以传递 --global 选项让 Git 读写此文件。
+    当前使用仓库的 Git 目录中的 config 文件（就是 .git/config）：针对该仓库。
+
+2)用户信息
+
+    $ git config --global user.name "LeeChunJun"
+    $ git config --global user.email 1772043675@qq.com
+
+3)文本编辑器
+
+    $ git config --global core.editor emacs
+
+4)检查配置信息
+
+    $ git config user.name
+
+获取帮助:
+$ git help <verb>
+
+
+// 2.基础
+
+获取 Git 仓库：
+1)在现有项目或目录下导入所有文件到 Git 中
+
+    $ git init
+    $ git add LICENSE
+    $ git commit -m 'initial project version'
+
+2)从一个服务器克隆一个现有的 Git 仓库
+
+    // 默认配置下远程Git仓库中的每一个文件的每一个版本都将被拉取下来。
+    $ git clone https://github.com/libgit2/libgit2 mylibgit
+
+记录每次更新到仓库：
+1)工作目录下的每一个文件都不外乎这两种状态：已跟踪或未跟踪。
+
+    已跟踪的文件：指那些被纳入了版本控制的文件，在上一次快照中有它们的记录，在工作一段时间后，它们的状态可能处于未修改，已修改或已放入暂存区。
+    未跟踪的文件：工作目录中除已跟踪文件以外的所有其它文件都属于未跟踪文件，它们既不存在于上次快照的记录中，也没有放入暂存区。 初次克隆某个
+    仓库的时候，工作目录中的所有文件都属于已跟踪文件，并处于未修改状态。
+
+2)检查当前文件状态：
+
+    $ git status
+
+3)跟踪新文件：
+
+    $ git add README
+
+4)暂存已修改文件
+
+    $ git add CONTRIBUTING.md
+    $ git status
+
+5)状态简览
+
+    $ git status -s
+    A  lib/git.rb -> 新添加到暂存区中的文件前面有 A 标记
+    M  lib/simplegit.rb -> 修改过的文件前面有 M 标记，出现在靠左边的 M 表示该文件被修改了并放入了暂存区
+    ?? LICENSE.txt -> 新添加的未跟踪文件前面有 ?? 标记
+     M README -> 出现在右边的 M 表示该文件被修改了但是还没放入暂存区
+    MM Rakefile -> 在暂存区和工作区都有该文件被修改了的记录。
+
+6)忽略文件
+
+    创建一个名为 .gitignore 的文件，列出要忽略的文件模式，文件 .gitignore 的格式规范如下：
+    1)所有空行或者以 # 开头的行都会被 Git 忽略。
+    2)可以使用标准的 glob 模式匹配。
+    3)匹配模式可以以（/）开头防止递归。
+    4)匹配模式可以以（/）结尾指定目录。
+    5)要忽略指定模式以外的文件或目录，可以在模式前加上惊叹号（!）取反。
+
+    所谓的 glob 模式是指 shell 所使用的简化了的正则表达式。 
+    星号（*）匹配零个或多个任意字符；
+    [abc] 匹配任何一个列在方括号中的字符（这个例子要么匹配一个 a，要么匹配一个 b，要么匹配一个 c）；
+    问号（?）只匹配一个任意字符；
+    如果在方括号中使用短划线分隔两个字符，表示所有在这两个字符范围内的都可以匹配（比如 [0-9] 表示匹配所有 0 到 9 的数字）；
+    使用两个星号（*) 表示匹配任意中间目录，比如 a/**/z 可以匹配 a/z , a/b/z 或 a/b/c/z 等。
+
+7)查看已暂存和未暂存的修改
+
+    当前做的哪些更新还没有暂存？ 有哪些更新已经暂存起来准备好了下次提交？
+    此命令比较的是工作目录中当前文件和暂存区域快照之间的差异， 也就是修改之后还没有暂存起来的变化内容。
+    $ git diff
+    若要查看已暂存的将要添加到下次提交里的内容，可以用：
+    $ git diff --cached
+
+8)提交更新
+
+    每次准备提交前，先用 git status 看下，是不是都已暂存起来了， 然后再运行提交命令 git commit：
+    $ git commit
+    也可以在 commit 命令后添加 -m 选项，将提交信息与命令放在同一行：
+    $ git commit -m "Story 182: Fix benchmarks for speed"
+
+9)跳过使用暂存区域
+
+    Git 提供了一个跳过使用暂存区域的方式， 只要在提交的时候，给 git commit 加上 -a 选项，Git 就会
+    自动把所有已经跟踪过的文件暂存起来一并提交，从而跳过 git add 步骤：
+    $ git commit -a
+
+10)移除文件
+
+    $ rm PROJECTS.md
+    $ git rm PROJECTS.md
+    如果删除之前修改过并且已经放到暂存区域的话，则必须要用强制删除选项 -f（译注：即 force 的首字母）。 
+    这是一种安全特性，用于防止误删还没有添加到快照的数据，这样的数据不能被 Git 恢复。
+
+    我们想把文件从 Git 仓库中删除（亦即从暂存区域移除），但仍然希望保留在当前工作目录中。 
+    换句话说，你想让文件保留在磁盘，但是并不想让 Git 继续跟踪。
+    $ git rm --cached README
+
+11)移动文件
+
+    $ git mv README.md README
+    ->
+    $ mv README.md README
+    $ git rm README.md
+    $ git add README
+
+查看提交历史：
+
+
+
+// 3.git命令
+在现有目录中初始化仓库：
+git init
+git help
+git init
+git add *.c // 添加内容到下一次提交中
+git commit -m 'initial project version'
+git clone https://github.com/libgit2/libgit2 mylibgit 
+git status // 检查当前文件状态
+
