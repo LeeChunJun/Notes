@@ -205,15 +205,160 @@ $ git help <verb>
 
 查看提交历史：
 
+    默认不用任何参数的话，git log 会按提交时间列出所有的更新
+    $ git log
+    一个常用的选项是 -p，用来显示每次提交的内容差异。 你也可以加上 -2 来仅显示最近两次提交
+    $ git log -p -2
+    如果你想看到每次提交的简略的统计信息，你可以使用 --stat 选项
+    $ git log --stat
+    可以指定使用不同于默认格式的方式展示提交历史
+    $ git log --pretty=oneline
+    $ git log --pretty=format:"%h - %an, %ar : %s"
+    $ git log --pretty=format:"%h %s" --graph
 
+撤消操作:
+1)重新提交
 
-// 3.git命令
-在现有目录中初始化仓库：
-git init
-git help
-git init
-git add *.c // 添加内容到下一次提交中
-git commit -m 'initial project version'
-git clone https://github.com/libgit2/libgit2 mylibgit 
-git status // 检查当前文件状态
+    有时候我们提交完了才发现漏掉了几个文件没有添加，或者提交信息写错了。 此时，可以运行带有 --amend 选项的提交命令尝试重新提交：
+    $ git commit -m 'initial commit'
+    $ git add forgotten_file
+    $ git commit --amend
 
+2)取消暂存的文件
+
+    $ git reset HEAD CONTRIBUTING.md
+
+3)撤消对文件的修改
+
+    git checkout -- CONTRIBUTING.md
+
+远程仓库的使用:
+1)查看远程仓库
+
+    $ git clone https://github.com/schacon/ticgit
+    Cloning into 'ticgit'...
+    remote: Reusing existing pack: 1857, done.
+    remote: Total 1857 (delta 0), reused 0 (delta 0)
+    Receiving objects: 100% (1857/1857), 374.35 KiB | 268.00 KiB/s, done.
+    Resolving deltas: 100% (772/772), done.
+    Checking connectivity... done.
+    $ cd ticgit
+    $ git remote -v
+    origin  https://github.com/LeeChunJun/Notes.git (fetch)
+    origin  https://github.com/LeeChunJun/Notes.git (push)
+
+2)添加远程仓库
+
+    $ git remote
+    origin
+    $ git remote add pb https://github.com/paulboone/ticgit
+    $ git remote -v
+    origin	https://github.com/schacon/ticgit (fetch)
+    origin	https://github.com/schacon/ticgit (push)
+    pb	https://github.com/paulboone/ticgit (fetch)
+    pb	https://github.com/paulboone/ticgit (push)
+
+3)从远程仓库中抓取与拉取
+
+    注意 git fetch 命令会将数据拉取到你的本地仓库 - 它并不会自动合并或修改你当前的工作。 当准备好时你必须手动将其合并入你的工作。
+    $ git fetch [remote-name]
+    从最初克隆的服务器上抓取数据并自动尝试合并到当前所在的分支。
+    $ git pull [remote-name]
+
+4)推送到远程仓库
+
+    git push [remote-name] [branch-name]
+    $ git push origin master
+
+5)查看远程仓库
+
+    git remote show [remote-name]
+
+6)远程仓库的移除与重命名
+
+    $ git remote rename pb paul
+    $ git remote
+    origin
+    paul
+
+打标签：
+1)列出标签
+
+    $ git tag
+    v0.1
+    v1.3
+
+2)创建标签
+
+    Git 使用两种主要类型的标签：轻量标签（lightweight）与附注标签（annotated）。
+    一个轻量标签很像一个不会改变的分支 - 它只是一个特定提交的引用。
+    附注标签是存储在 Git 数据库中的一个完整对象。 它们是可以被校验的；
+    其中包含打标签者的名字、电子邮件地址、日期时间；还有一个标签信息；
+    并且可以使用 GNU Privacy Guard （GPG）签名与验证。 
+
+3)附注标签
+
+    运行 tag 命令时指定 -a 选项：
+    $ git tag -a v1.4 -m 'my version 1.4'
+    $ git tag
+    v0.1
+    v1.3
+    v1.4
+    -m 选项指定了一条将会存储在标签中的信息。 如果没有为附注标签指定一条信息，Git 会运行编辑器要求你输入信息。
+
+4)轻量标签
+
+    轻量标签本质上是将提交校验和存储到一个文件中 - 没有保存任何其他信息。 
+    创建轻量标签，不需要使用 -a、-s 或 -m 选项，只需要提供标签名字：
+    $ git tag v1.4-lw
+    $ git tag
+    v0.1
+    v1.3
+    v1.4
+    v1.4-lw
+    v1.5
+
+5)后期打标签
+
+    $ git tag -a v1.2 9fceb02
+
+6)共享标签
+
+    git push 命令并不会传送标签到远程仓库服务器上。 在创建完标签后你必须显式地推送标签到共享服务器上。
+    $ git push origin [tagname]
+
+    一次性推送很多标签
+    $ git push origin --tags
+    Counting objects: 1, done.
+    Writing objects: 100% (1/1), 160 bytes | 0 bytes/s, done.
+    Total 1 (delta 0), reused 0 (delta 0)
+    To git@github.com:schacon/simplegit.git
+    * [new tag]         v1.4 -> v1.4
+    * [new tag]         v1.4-lw -> v1.4-lw
+
+7)删除标签
+
+    标签删除 ->git tag -d <tagname>
+    $ git tag -d v1.4-lw
+    Deleted tag 'v1.4-lw' (was e7d5add)
+
+    远程标签删除 -> git push <remote> :refs/tags/<tagname>
+    $ git push origin :refs/tags/v1.4-lw
+    To /git@github.com:schacon/simplegit.git
+    - [deleted]         v1.4-lw
+
+8)检出标签
+
+    如果你想查看某个标签所指向的文件版本，可以使用 git checkout 命令
+
+Git 别名：
+
+    Git 并不会在你输入部分命令时自动推断出你想要的命令。
+    如果不想每次都输入完整的 Git 命令，可以通过 git config 文件来轻松地为每一个命令设置一个别名。 
+
+    $ git config --global alias.co checkout
+    $ git config --global alias.br branch
+    $ git config --global alias.ci commit
+    $ git config --global alias.st status
+
+   这意味着，当要输入 git commit 时，只需要输入 git ci
