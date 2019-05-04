@@ -1,0 +1,9 @@
+git config --global user.name "LeeChunJun" 
+git config --global user.email 1772043675@qq.com
+cd E:/Notes
+echo "# Notes" >> README.md
+git init
+git add README.md
+git commit -m "init commit"
+git remote add origin https://github.com/LeeChunJun/Notes.git
+git push -u origin master
