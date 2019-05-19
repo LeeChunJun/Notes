@@ -254,6 +254,12 @@ View 的事件分发机制：
 
 2) View 事件分发
 
-    点击事件 MotionEvent，系统将 MotionEvent 传递给 View 层级。
+    点击事件 MotionEvent，系统将 MotionEvent 传递给 View 层级   ->  事件分发
+    dispatchTouchEvent(MotionEvent ev)  // 用来进行事件的分发
+    onInterceptTouchEvent(MotionEvent ev)   // 用来进行事件的拦截
+    onTouchEvent()  //  用来处理点击事件
+
+    MotionEvent -> Activity.dispatchTouchEvent() -> PhoneWindow -> DecorView -> ViewGroup.dispatchTouchEvent
+    
 
     
