@@ -1,0 +1,259 @@
+// 1.View 体系
+
+View 树：
+ViewGroup
+View
+
+坐标系：
+1) Android 坐标系
+
+    绝对坐标：
+    getRawX()
+    getRawY()
+
+2) View 坐标系
+
+    获取 View 控件到其父控件 ViewGroup 中的位置：
+    getTop()
+    getBottom()
+    getLeft()
+    getRight()
+
+    视图坐标：
+    getX()
+    getY()
+
+    View 获取自身宽高：
+    width = getRight() - getLeft()      // getWidth()
+    height = getBottom() - getTop()     // getHeight()
+
+View 滑动：
+1) layout() 方法
+
+    在自定义 View 类中
+    通过 layout 方法来重新放置 View 的位置：
+    layout(getLeft() + offsetX, getTop() + offsetY, getRight() + offsetX, getBottom() + offsetY)
+ 
+2) offsetLeftAndRight()、offsetTopAndBottom() 方法
+
+    在自定义 View 类中
+    对 left 和 right 进行偏移：
+    offsetLeftAndRight(offsetX)
+    对 top 和 bottom 进行偏移：
+    offsetTopAndBottom(offsetY)
+
+3) LayoutParams
+
+    父布局是 LinearLayout 时：
+    LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams)getLayoutParams();
+    layoutParams.leftMargin = getLeft() + offsetX;
+    layoutParams.topMargin = getTop() + offsetY;
+    setLayoutParams(layoutParams);
+
+    父布局是 ViewGroup 时：
+    ViewGroup.MarginLayoutParams layoutParams = (ViewGroup.MarginLayoutParams)getLayoutParams();
+    layoutParams.leftMargin = getLeft() + offsetX;
+    layoutParams.topMargin = getTop() + offsetY;
+    setLayoutParams(layoutParams);
+
+4) 动画
+
+    步骤1：在 res 目录新建 anim 文件夹并创建 translate.xml ：
+    <?xml version="1.0" encoding="utf-8"?>
+    <set xmlns:android="http://schemas.android.com/apk/res/android"
+        android:fillAfter="true">   /* View 移动后留在当前位置 */
+        <translate 
+            android:duration="1000"
+            android:fromXDelta="0"
+            android:toXDelta="300" />
+    </set>
+
+    步骤2：java 代码中调用
+    mCustomView.setAnimation(AnimationUtils.loadAnimation(this, R.anim.translate));
+
+    属性动画：
+    ObjectAnimator.ofFloat(mCustomView, "translateX", 0, 300).setDuration(1000).start();
+
+5) scrollTo 与 scrollBy
+
+    /* 移动的参考系是手机屏幕 */
+    scrollTo(x, y)：移动到一个具体的坐标点
+    scrollBy(dx, dy)：移动的增量为dx，dy
+
+    具有过渡效果的平移：
+    步骤1：
+    public CustomView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        mScroller = new Scroller(context);
+    }
+    
+    步骤2：系统在绘制 CustomView 的时候在 draw() 方法中调用 computeScroll() 方法
+    @override
+    public void computeScroll() {
+        super.computeScroll()
+        if(mScroller.computeScrollOffset()) {
+            ((View) getParent()).scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
+            invalidate();
+        }
+    }
+
+    步骤3：在 CustomView 中定义 smoothScrollTo() 方法，调用 mScroller 的 startScroll() 方法
+    public void smoothScrollTo(int destX, int destY) {
+        int scrollX = getScrollX();
+        int delta = destX - scrollX;
+        mScroller.startScroll(scrollX, 0, delta, 0, 2000);
+        invalidate();
+    }
+
+    步骤4：设定 mCustomView 向右平移 400 像素
+    mCustomView.smoothScrollTo(-400, 0);
+
+属性动画：
+1) Adnroid 动画类型：
+
+    帧动画、View 动画、属性动画     // 四种动画类型
+
+2) View 动画：
+    AlphaAnimation、RotateAnimation、TranslateAnimation、ScaleAnimation     // 四种动画方式
+    元素发生 View 动画后，其响应事件的位置依旧在动画进行前的位置，只能做普通动画效果，避免涉及交互操作
+
+3) Animator 属性动画：
+    ObjectAnimator -> 进行精细化的控制，控制一个对象和一个属性值
+
+        通过其静态工厂类创建，参数包括一个对象和对象的属性名字
+        ObjectAnimator mObjectAnimator = ObjectAnimator.ofFloat(view, "translateX", 200);
+        mObjectAnimator.setDuration(3000);
+        mObjectAnimator.start();
+
+        常用的对象属性值
+        translateX、translateY
+        rotation、rotationX、rotationY
+        PrivotX、PrivotY    // 控制 View 支点的位置，默认是 View 中心
+        alpha   // 透明度，默认为 1 不透明
+        x 和 y  // View 对象在容器中的最终位置
+
+        使用 ObjectAnimator 的时候，要操作的属性必须要有 get() 和 set() 方法，否则要手动添加
+        class myView {
+            View mTarget;
+            public myView(View mTarget) {
+                this.mTarget = mTarget;
+            }
+            public int getWidth() {
+                return this.mTarget.getLayoutParams().width;
+            }
+            public void setWidth(int width) {
+                mTarget.getLayoutParams().width = width;
+                mTarget.requestLayout();
+            }
+        }
+        MyView myView = new MyView();
+        ObjectAnimator.ofInt(myView, "width", 500).setDuration(3000).start();
+
+    ValueAnimator -> 数值发生器，用来产生一定规律的数字，从而让调用者控制动画的实现
+
+        ValueAnimator mValueAnimator = ValueAnimator.ofFloat(0, 100);
+        mValueAnimator.setTarget(view);
+        mValueAnimator.setDuration(1000).start();
+        mValueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @override
+            public void onAnimatorUpdate(ValueAnimator animation) {
+                Float mFloat = animation.getAnimatedValue();
+                // ...
+            }
+        });
+
+    AnimatorListener -> 完整的动画有 start、repeat、end、cancel 这四个过程
+
+        ObjectAnimator mObjectAnimator = ObjectAnimator.ofFloat(view, "alpha", 1.5f);
+        mObjectAnimator.addListener(new Animator.AnimatorListener() {
+            @override
+            public void onAnimatorStart(Animator animator) {
+            }
+            @override
+            public void onAnimatorEnd(Animator animator) {
+            }
+            @override
+            public void onAnimatorCancel(Animator animator) {
+            }
+            @override
+            public void onAnimatorRepeat(Animator animator) {
+            }
+        });
+
+        // 或者 AnimatorListenerAdapter
+        mObjectAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimatorEnd(Animator animator) {
+                super.onAnimatorEnd(animator)
+            }
+        });
+
+    AnimatorSet -> 组合动画，使用多个 ObjectAnimator 组合到 AnimatorSet 形成一个动画
+
+        在 AnimatorSet 内的 play() 方法中构造  AnimatorSet.Builder 类。
+        AnimatorSet.Builder 中：
+        with(Animator anim)      // 将现有动画和传入的动画同时执行
+        after(Animator anim)     // 将现有动画插入到传入的动画之后执行
+        before(Animator anim)    // 将现有动画插入到传入的动画之前执行
+        after(long delay)        // 将现有动画延迟指定毫秒后执行
+        
+        // 使用 AnimatorSet
+        mObjectAnimator1 = ...
+        mObjectAnimator2 = ...
+        mObjectAnimator3 = ...
+
+        AnimatorSet animatorSet = new AnimatorSet();
+        animatorSet.setDuration(1000);
+        animator.play(mObjectAnimator1).with(mObjectAnimator2).after(mObjectAnimator3);
+        animatorSet.start()
+
+    PropertyValuesHolder -> 另一种组合动画
+
+        结合 ObjectAnimator.ofPropertyValuesHolder(Object target, PropertyValuesHolder... values) 使用
+        PropertyValuesHolder valuesHolder1 = PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.5f);
+        PropertyValuesHolder valuesHolder2 = PropertyValuesHolder.ofFloat("rotationX", 0.0f, 90.0f, 0.0f);
+        PropertyValuesHolder valuesHolder3 = PropertyValuesHolder.ofFloat("alpha", 1.0f, 0.3f, 1.0f);
+        PropertyValuesHolder valuesHolder1 = PropertyValuesHolder.ofFloat("scaleX", 1.0f, 1.5f);
+        ObjectAnimator objectAnimator = ObjectAnimator.ofPropertyValuesHolder(mCustomView, valuesHolder1, valuesHolder2, valuesHolder3);
+        objectAnimator.setDuration(2000).start();
+    
+    在 xml 文件中使用属性动画
+
+        步骤1：在 res 中新建 animator 文件夹并创建 scale.xml 
+        <?xml version="1.0" encoding="utf-8"?>
+        <objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:duration="3000"
+            android:propertyName="scaleX"
+            android:valueFrom="1.0"
+            android:valueTo="2.0"
+            android:valueType="floatType">
+        </objectAnimator>
+
+        步骤2：
+        Animator animator = AnimatorInflater.loadAnimator(this, R.this.scale);
+        animator.setTarget(mCustomView);
+        animator.start();
+
+解析 Scroller ：
+
+    方法调用过程
+    Scroller.startScroll() -> View.invalidate() -> View.draw() -> View.computeScroll() -> 
+    Scroller.computeScrollOffset() ->
+    ((View)View.getParent()).scrollTo() -> View.invalidate()
+
+View 的事件分发机制：
+1) Activity 构成
+
+    Activity -> 
+    getWindow() -> new PhoneWindow() -> 
+    installDecor() -> generateDecor() -> generateLayout(mDecor)
+
+    DecorView -> TitleView + ContentView
+
+2) View 事件分发
+
+    点击事件 MotionEvent，系统将 MotionEvent 传递给 View 层级。
+
+    
