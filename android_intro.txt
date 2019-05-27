@@ -109,7 +109,7 @@ View 滑动：
     mCustomView.smoothScrollTo(-400, 0);
 
 属性动画：
-1) Adnroid 动画类型：
+1) Android 动画类型：
 
     帧动画、View 动画、属性动画     // 四种动画类型
 
@@ -259,7 +259,30 @@ View 的事件分发机制：
     onInterceptTouchEvent(MotionEvent ev)   // 用来进行事件的拦截
     onTouchEvent()  //  用来处理点击事件
 
-    MotionEvent -> Activity.dispatchTouchEvent() -> PhoneWindow -> DecorView -> ViewGroup.dispatchTouchEvent
-    
+    MotionEvent -> Activity.dispatchTouchEvent() -> PhoneWindow -> DecorView -> ViewGroup.dispatchTouchEvent()
+    ViewGroup.dispatchTouchEvent() // 首先，初始化将 mFristTouchTarget = null
+    ViewGroup.onInterceptTouchEvent()   // ViewGroup 拦截事件，此时 mFristTouchTarget = null 
+    ViewGroup.dispatchTransformedTouchEvent()   // 有子 View 则调用 View.dispatchTouchEvent() 
+    View.dispatchTouchEvent() // onTouchListener 不为空并且 onTouch() 方法返回 true 则表示事件被消费，否则执行 onTouchEvent(event)
+    View.onTouchEvent(event)    // CLICKABLE、LONG_CLICKABLE 有一个为 true 则消费事件
+    MotionEvent.ACTION_UP -> performClick() // 执行 onClick()
+
+    MotionEvent.ACTION_DOWN -> MotionEvent.ACTION_MOVE  ->  MotionEvent.ACTION_UP
+
+    点击事件分发的传递规则：(伪代码)
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        boolean result = false;
+        if(onInterceptTouchEvent(ev)){
+            result = super.onTouchEvent(ev)
+        } else {
+            result = child.dispatchTouchEvent(ev)
+        }
+        return result;
+    }
+
+    点击事件由上而下传递返回值规则，为 true 拦截，不向下传递；为 false 不拦截，继续向下传递。
+    点击事件由下而上传递返回值规则，为 true 处理事件，不向上传递；为 false 不处理，继续向上传递。
+
+View 的工作流程：
 
     
