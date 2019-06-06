@@ -285,4 +285,31 @@ View 的事件分发机制：
 
 View 的工作流程：
 
+    measure -> 测量 View 的宽和高
+    layout -> 确定 View 的位置
+    draw -> 绘制 View
+
+自定义 View：
+    1)自定义 View
+
+        步骤一：自定义属性
+        values/attrs.xml
+            <?xml version="1.0" encoding="utf-8"?>
+                <resources>
+                    <declare-styleable name="RectView">
+                        <attrs name="rect_color" format="color" />
+                    </declare-styleable>
+                </resources>
+        步骤二：
+        TypedArray mTypeArray = context.obtainStyledAttributes(attrs, R.styleable.RectView);
+        // 提取 RectView 属性集合的 rect_color 属性。如果没设置，默认值为 Color.RED
+        mColor = mTypeArray.getColor(R.styleable.RectView_rect_color, Color.RED);
+        // 获取资源后要即时回收
+        mTypeArray.recycle();
+
+    自定义 ViewGroup
+    自定义组合控件
+
+
+// 2.多线程编程
     
