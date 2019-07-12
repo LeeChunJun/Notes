@@ -27,3 +27,185 @@
     传统的 IPC 访问接入点是开发的，无法阻止恶意程序通过猜测接收方地址获得链接。
 
     Binder 即支持实名 Binder，又支持匿名 Binder，安全性高
+
+// 2.Android ARouter
+
+组件化或者模块化开发模式，阿里巴巴自研路由框架，主要解决组件间、模块间的 界面跳转 问题
+
+过程：
+    1.注册
+        B 界面将类的信息，通过key-value的形式，注册到 arouter 中。
+    2.查询
+        A 界面将类信息与额外信息（传输参数、跳转动画等），通过 key 传递至 arouter 中，
+        并查询对应需要跳转类的信息。
+    3.结合
+        将 A 界面类信息、参数与 B 界面的类信息进行封装结合。
+    4.跳转
+        将结合后的信息，使用 startActivity 实现跳转。
+
+原理：
+    1.通过 apt 技术利用注解编译时生成类，封装目标界面类的类信息。
+    2.在初始化时，把编译生成的类通过 key-value 的方式存储在 arouter 中。
+    3.发送操作者通过 key 获取到目标界面类的信息。
+    4.把发送操作者的信息与目标界面类信息进行结合或者关联在一起。
+    5.实现跳转功能。
+
+简单概括：将需要相互跳转的界面信息传递至 arouter 中存储关联 & 实现跳转。
+
+使用：
+    1.跳转界面不带参
+        // 发送跳转操作
+        // 普通跳转
+        ARouter.getInstance().build("/test/activity").navigation();
+
+        // 目标界面
+        // 在支持路由的页面上添加注解(必选)
+        // 这里的路径需要注意的是至少需要有两级，/xx/xx
+        @Route(path = "/test/activity")
+        public class YourActivity extend Activity {
+            ...
+        }
+
+    2.跳转界面带参
+        // 发送跳转操作
+        ARouter.getInstance().build("/test/1")
+            .withLong("key1", 666L)
+            .withString("key3", "888")
+            .withSerializable("key4", new Test("Jack", "Rose"))
+            .navigation();
+
+        // 目标界面
+        @Route(path = "/test/1")
+        public class YourActivity extend Activity {
+            // 获取数据三种方式
+            // 1.通过 Autowired 注解表明 key & 需要在 onCreate 中调用
+            // ARouter.getInstance().inject(this); 配合使用
+            @Autowired(name = "key1")
+            public long data;
+
+            // 2.通过 Autowired 注解 & 将 key1 作为属性的名称 & 需要在 onCreate 中调用
+            // ARouter.getInstance().inject(this); 配合使用
+            @Autowired()
+            public long key1;
+
+            // 3.通过 Bundle 获取
+            getIntent().getExtras().getLong("key1")
+        }
+
+    3.跳转界面带参(传递Object)
+        // 定义解析 Obeject 的 SerializationService
+        /**
+        * 处理传递参数中自定义的 Object ---> withObject
+        */
+        @Route(path = "/custom/json")
+        public class JsonSerializationService implements SerializationService {
+            Gson gson;
+            @Override
+            public <T> T json2Object(String input, Class<T> clazz) {
+                return gson.fromJson(input,clazz);
+            }
+            @Override
+            public String object2Json(Object instance) {
+                return gson.toJson(instance);
+            }
+            @Override
+            public <T> T parseObject(String input, Type clazz) {
+                return gson.fromJson(input,clazz);
+            }
+            @Override
+            public void init(Context context) {
+                gson = new Gson();
+            }
+        }
+
+        // 发送跳转操作
+        ARouter.getInstance().build("/test/1")
+            .withObejct("key4", new Test("Jack", "Rose"))
+            .navigation();
+
+        // 目标界面
+        @Route(path = "/test/1")
+        public class YourActivity extend Activity {
+            ...
+            SerializationService serializationService = ARouter.getInstance().navigation(SerializationService.class);
+            serializationService.init(this);
+            User obj = serializationService.parseObject(getIntent().getStringExtra("key4"), User.class);
+        }
+    
+    4.Uri跳转
+        // 界面配置
+        <activity android:name=".activity.SchameFilterActivity">
+            <!-- Schame -->
+            <intent-filter>
+                <data
+                android:host="m.aliyun.com"
+                android:scheme="arouter"/>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+            </intent-filter>
+        </activity>
+
+        // 发送跳转操作
+        Uri testUriMix = Uri.parse("arouter://m.aliyun.com/test/activity2");
+        ARouter.getInstance().build(testUriMix)
+                .withString("key1", "value1")
+                .navigation();
+
+        // 目标界面
+        @Route(path = "/test/activity2")
+        public class Test2Activity extends AppCompatActivity {
+        }
+    
+    5.跳转结果监听
+        ARouter.getInstance()
+                .build("/test/activity2")
+                .navigation(this, new NavCallback() {
+                    @Override
+                        public void onArrival(Postcard postcard) {
+                        }
+                        @Override
+                        public void onInterrupt(Postcard postcard) {
+                            Log.d("ARouter", "被拦截了");
+                        }
+                    });
+
+    6.声明拦截器(拦截跳转过程，面向切面编程)
+        // 比较经典的应用就是在跳转过程中处理登陆事件，这样就不需要在目标页重复做登陆检查
+        // 拦截器会在跳转之间执行，多个拦截器会按优先级顺序依次执行
+        @Interceptor(priority = 8, name = "测试用拦截器")
+        public class TestInterceptor implements IInterceptor {
+            @Override
+            public void process(Postcard postcard, InterceptorCallback callback) {
+            ...
+            callback.onContinue(postcard);  // 处理完成，交还控制权
+            // callback.onInterrupt(new RuntimeException("我觉得有点异常"));      // 觉得有问题，中断路由流程
+            // 以上两种至少需要调用其中一种，否则不会继续路由
+            }
+            @Override
+            public void init(Context context) {
+            // 拦截器的初始化，会在sdk初始化的时候调用该方法，仅会调用一次
+            }
+        }
+
+    7.为目标页面声明更多信息
+        // 我们经常需要在目标页面中配置一些属性，比方说"是否需要登陆"之类的
+        // 可以通过 Route 注解中的 extras 属性进行扩展，这个属性是一个 int 值，换句话说，单个 int 有4字节，也就是32位，可以配置32个开关
+        // 剩下的可以自行发挥，通过字节操作可以标识32个开关，通过开关标记目标页面的一些属性，在拦截器中可以拿到这个标记进行业务逻辑判断
+        @Route(path = "/test/activity", extras = Consts.XXXX)
+
+    8.依赖注入解耦
+        // 注册需要依赖注入的对象
+        @Route(path = "/provider/testP")
+        public class TestProvider implements IProvider {
+            @Override
+            public void init(Context context) {
+            }
+            public String test(){
+                return ("Hello Provider!");
+            }
+        }
+
+        // 获取对象 & 使用
+        ARouter.getInstance().navigation(TestProvider.class).test();
+
