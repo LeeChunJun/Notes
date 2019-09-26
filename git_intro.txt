@@ -1,364 +1,175 @@
-// 创建 github 项目
+// 1.移动技术简介
+
+原生开发：
+1)可访问平台全部功能（GPS、摄像头）；
+2)速度快、性能高、可以实现复杂动画及绘制，整体用户体验好；
+3)平台特定，开发成本高；不同平台必须维护不同代码，人力成本随之变大；
+4)内容固定，动态化弱，大多数情况下，有新功能更新时只能发版；
+
+跨平台技术简介：
+1)H5+原生（Cordova、Ionic、微信小程序）
+2)JavaScript开发+原生渲染 （React Native、Weex、快应用）
+3)自绘UI+原生(QT for mobile、Flutter)
+
+H5+原生混合开发：
+
+    将APP的一部分需要动态变动的内容通过H5来实现，通过原生的网页加载控件
+    WebView (Android)或WKWebView（iOS）来加载（以后若无特殊说明，我们
+    用WebView来统一指代android和iOS中的网页加载控件）。我们称这种h5+原
+    生的开发模式为混合开发 ，采用混合模式开发的APP我们称之为混合应用或
+    Hybrid APP ，如果一个应用的大多数功能都是H5实现的话，我们称其为Web APP 。
+
+    混合开发中，H5代码是运行在WebView中，而WebView实质上就是一个浏览器内核，
+    其JavaScript依然运行在一个权限受限的沙箱中，所以对于大多数系统能力都没有
+    访问权限，如无法访问文件系统、不能使用蓝牙等。
+
+    混合框架一般都会在原生代码中预先实现一些访问系统能力的API， 然后暴露给
+    WebView以供JavaScript调用，这样一来，WebView就成为了JavaScript与原生API
+    之间通信的桥梁，主要负责JavaScript与原生之间传递调用消息，而消息的传递必须
+    遵守一个标准的协议，它规定了消息的格式与含义，我们把依赖于WebView的用于在
+    JavaScript与原生之间通信并实现了某种消息传输协议的工具称之为WebView 
+    JavaScript Bridge, 简称 JsBridge，它也是混合开发框架的核心。
+
+React Native、Weex及快应用：
+
+    React是一个响应式的Web框架，包含两个重要的概念：DOM树与响应式编程。
+    1)DOM树与控件树：
+        文档对象模型（Document Object Model，简称DOM），一种独立于平台和语言的
+        方式访问和修改一个文档的内容和结构。DOM操作就是指直接来操作渲染树（或控件树），
+        因此，可以看到其实DOM树和控件树是等价的概念，只不过前者常用于Web开发中，
+        而后者常用于原生开发中。
+        
+    2)响应式编程：
+        状态改变则UI随之自动改变，而React框架本身就是响应用户状态改变的事件而执行重新
+        构建用户界面的工作，这就是典型的响应式编程范式。
+
+        首先，开发者只需关注状态转移（数据），当状态发生变化，React框架会自动根据新的状态重新构建UI。
+        其次，React框架在接收到用户状态改变通知后，会根据当前渲染树，结合最新的状态改变，通过Diff算法，
+        计算出树中变化的部分，然后只更新变化的部分（DOM操作），从而避免整棵树重构，提高性能。
+
+        上述第二步中，状态变化后React框架并不会立即去计算并渲染DOM树的变化部分，相反，React会在DOM
+        的基础上建立一个抽象层，即虚拟DOM树，对数据和状态所做的任何改动，都会被自动且高效的同步到
+        虚拟DOM，最后再批量同步到真实DOM中，而不是每次改变都去操作一下DOM。
+
+        1.如果DOM只是外观风格发生变化，如颜色变化，会导致浏览器重绘界面。
+        2.如果DOM树的结构发生变化，如尺寸、布局、节点隐藏等导致，浏览器就需要回流（及重新排版布局）。
+
+        浏览器的重绘和回流都是比较昂贵的操作，如果每一次改变都直接对DOM进行操作，这会带来性能问题，而批量操作只会触发一次DOM更新。
+
+    React Native：
+    React Native 是 React 在原生移动应用平台的衍生产物，React中虚拟DOM最终会映射为浏览器DOM树，
+    而RN中虚拟DOM会通过 JavaScriptCore 映射为原生控件树。
+
+    JavaScriptCore 是一个JavaScript解释器，它在React Native中主要有两个作用：
+    1.为JavaScript提供运行环境。
+    2.是JavaScript与原生应用之间通信的桥梁，作用和JsBridge一样，事实上，在iOS中，很多JsBridge的实现都是基于 JavaScriptCore 。
+
+    RN中将虚拟DOM映射为原生控件的过程中分两步：
+    1.布局消息传递；将虚拟DOM布局信息传递给原生；
+    2.原生根据布局信息通过对应的原生控件渲染控件树；
+
+    相对于混合应用，由于React Native是原生控件渲染，所以性能会比混合应用中H5好很多，同时React Native是Web开发技术栈，
+    也只需维护一份代码，同样是跨平台框架。
+
+    Weex：
+    Weex支持Vue语法和Rax语法，Rax 的 DSL(Domain Specific Language) 语法是基于 React JSX 语法而创造。与 React 不同，
+    在 Rax 中 JSX 是必选的，它不支持通过其它方式创建组件，所以学习 JSX 是使用 Rax 的必要基础。而React Native只支持JSX语法。
+
+    快应用：
+    采用JavaScript语言开发，原生控件渲染，与React Native和Weex相比主要有两点不同：
+    1.快应用自身不支持Vue或React语法，其采用原生JavaScript开发，其开发框架和微信小程序很像，值得一提的是小程序目前已经可以
+      使用Vue语法开发（mpvue），从原理上来讲，Vue的语法也可以移植到快应用上。
+    2.React Native和Weex的渲染/排版引擎是集成到框架中的，每一个APP都需要打包一份，安装包体积较大；
+      而快应用渲染/排版引擎是集成到ROM中的，应用中无需打包，安装包体积小，正因如此，快应用才能在保证性能的同时做到快速分发。
+
+    JavaScript开发+原生渲染的方式：
+    1)采用Web开发技术栈，社区庞大、上手快、开发成本相对较低。
+    2)原生渲染，性能相比H5提高很多。
+    3)动态化较好，支持热更新。
+    4)渲染时需要JavaScript和原生之间通信，在有些场景如拖动可能会因为通信频繁导致卡顿。
+    5)JavaScript为脚本语言，执行时需要JIT(Just In Time)，执行效率和AOT(Ahead Of Time)代码仍有差距。
+    6)由于渲染依赖原生控件，不同平台的控件需要单独维护，并且当系统更新时，社区控件可能会滞后；除此之外，其控件系统也会受到
+      原生UI系统限制，例如，在Android中，手势冲突消歧规则是固定的，这在使用不同人写的控件嵌套时，手势冲突问题将会变得非常棘手。
+
+自绘UI+原生：QT Mobile
+
+    通过在不同平台实现一个统一接口的渲染引擎来绘制UI，而不依赖系统原生控件，所以可以做到不同平台UI的一致性。
+    注意，自绘引擎解决的是UI的跨平台问题，如果涉及其它系统能力调用，依然要涉及原生开发。
+
+    1)性能高；由于自绘引擎是直接调用系统API来绘制UI，所以性能和原生控件接近。
+    2)灵活、组件库易维护、UI外观保真度和一致性高；由于UI渲染不依赖原生控件，也就不需要根据不同平台的控件单独维护一套组件库，所以代码容易维护。
+      由于组件库是同一套代码、同一个渲染引擎，所以在不同平台，组件显示外观可以做到高保真和高一致性；另外，由于不依赖原生控件，也就不会受原生
+      布局系统的限制，这样布局系统会非常灵活。
+    3)动态性不足；为了保证UI绘制性能，自绘UI系统一般都会采用AOT模式编译其发布包，所以应用发布后，不能像Hybrid和RN那些使用JavaScript（JIT）
+      作为开发语言的框架那样动态下发代码。
+    4)开发效率低：QT使用C++作为其开发语言，而编程需要效率是直接会影响APP开发效率的，C++作为一门静态语言，在UI开发方面灵活性不及JavaScript
+      这样的动态语言，另外，C++需要开发者手动去管理内存分配，没有JavaScript及Java中垃圾回收（GC）的机制。
 
-git config --global user.name "LeeChunJun"
-git config --global user.email 1772043675@qq.com
-cd E:/Notes
-echo "# Notes" >> README.md
-git init
-git add README.md
-git commit -m "init commit"
-git remote add origin https://github.com/LeeChunJun/Notes.git
-git push -u origin master
+Flutter：
+    Flutter和QT mobile一样，都没有使用原生控件，相反都实现了一个自绘引擎，使用自身的布局、绘制系统。
 
+三种跨平台技术：
+    1)H5+原生                   WebView渲染     性能一般    开发效率高        支持动态化      框架代表：Cordova、Ionic
+    2)JavaScript+原生渲染       原生控件渲染     性能好      开发效率中        支持动态化      框架代表：RN、Weex
+    3)自绘UI+原生               调用系统API渲染  性能好      Flutter高, QT低   默认不支持      框架代表：QT、Flutter
 
-// 1.起步——版本控制
+// 2.Flutter简介
 
-关于版本控制：
-1)本地版本控制系统
-2)集中化的版本控制系统
-3)分布式版本控制系统
+跨平台自绘引擎：
 
-Git 简史：
-Linux 内核开源社区
+  Flutter既不使用WebView，也不使用操作系统的原生控件。 相反，Flutter使用自己的高性能渲染引擎来绘制widget。这样不仅可以保证在Android和iOS上UI
+  的一致性，而且也可以避免对原生控件依赖而带来的限制及高昂的维护成本。
 
-Git 基础：
-1)直接记录快照，而非差异比较
-2)近乎所有操作都是本地执行
-3)Git 保证完整性
-4)Git 一般只添加数据
-5)三种状态
+  Flutter使用Skia作为其2D渲染引擎，Skia是Google的一个2D图形处理函数库，包含字型、坐标转换，以及点阵图都有高效能且简洁的表现，Skia是跨平台的，
+  并提供了非常友好的API，目前Google Chrome浏览器和Android均采用Skia作为其绘图引擎。
 
-    Git 有三种状态：已提交（committed）、已修改（modified）和已暂存（staged）。
-    已提交：表示数据已经安全的保存在本地数据库中。
-    已修改：表示修改了文件，但还没保存到数据库中。
-    已暂存：表示对一个已修改文件的当前版本做了标记，使之包含在下次提交的快照中。
+  默认支持 iOS、Android、Fuchsia 以及 Web开发（Flutter for web）和PC开发
 
-    Git 仓库、工作目录以及暂存区域。
-    1)Git 仓库目录是 Git 用来保存项目的元数据和对象数据库的地方。这是 Git 中最重要的部分，从其它计算机克隆仓库时，拷贝的就是这里的数据。
-    2)工作目录是对项目的某个版本独立提取出来的内容。这些从 Git 仓库的压缩数据库中提取出来的文件，放在磁盘上供你使用或修改。
-    3)暂存区域是一个文件，保存了下次将提交的文件列表信息，一般在 Git 仓库目录中。有时候也被称作‘索引’，不过一般说法还是叫暂存区域。
+高性能：
+  1)Flutter APP 采用 Dart 语言开发。Dart 在 JIT（即时编译）模式下，速度与 JavaScript基本持平。
+    同时， Dart支持 AOT ，当以 AOT模式运行时，JavaScript便远远追不上了。速度的提升对高帧率下的视图数据计算很有帮助。
+  2)Flutter 使用自己的渲染引擎来绘制UI，布局数据等由 Dart 语言直接控制，所以在布局过程中不需要像 RN 那样要在 JavaScript 和 Native 之间通信，
+    这在一些滑动和拖动的场景下具有明显优势，因为在滑动和拖动过程往往都会引起布局发生变化，所以 JavaScript 需要和 Native 之间不停的同步布局信息，
+    这和在浏览器中要 JavaScript 频繁操作 DOM 所带来的问题是相同的，都会带来比较可观的性能开销。
 
-    基本的 Git 工作流程如下：
-    1)在工作目录中修改文件。
-    2)暂存文件，将文件的快照放入暂存区域。
-    3)提交更新，找到暂存区域的文件，将快照永久性存储到 Git 仓库目录。
+采用Dart语言开发：
 
-    如果 Git 目录中保存着特定版本的文件，就属于已提交状态。 
-    如果作了修改并已放入暂存区域，就属于已暂存状态。
-    如果自上次取出后，作了修改但还没有放到暂存区域，就是已修改状态。
+  1)JIT：
+    解释执行的则是一句一句边翻译边运行，通常将这种类型称为JIT（Just-in-time）即“即时编译”。
+  2)AOT：
+    静态编译的程序在执行前全部被翻译为机器码，通常将这种类型称为AOT （Ahead of time）即 “提前编译”；
+  
+  需要注意的是 JIT 和 AOT 指的是程序运行方式，和编程语言并非强关联的，有些语言既可以以 JIT 方式运行也可以以 AOT 方式运行，如 Java、Python，它们
+  可以在第一次执行时编译成中间字节码、然后在之后执行时可以直接执行字节码
 
-安装 Git：
-1)在 Linux 上安装
+Flutter为什么选择Dart语言：
 
-    $ sudo yum install git -> Fedora
-    $ sudo apt-get install git -> Debian
+  1)开发效率高
+    基于 JIT 的快速开发周期：Flutter在开发阶段采用 JIT 模式，这样就避免了每次改动都要进行编译，极大的节省了开发时间；
+    基于 AOT 的发布包: Flutter在发布时可以通过 AOT 生成高效的 ARM 代码以保证应用性能。而 JavaScript 则不具有这个能力。
 
-2)在 Mac 上安装
+  2)高性能
+    Flutter中需要能够在每个动画帧中运行大量的代码。这意味着需要一种既能提供高性能的语言，而不会出现会丢帧的周期性暂停。
 
-    安装 Xcode Command Line Tools
+  3)快速内存分配
+  4)类型安全
+    Dart本身就支持静态类型
 
-3)在 Windows 上安装
-4)从源代码安装
+Flutter框架结构：
 
-    $ sudo yum install curl-devel expat-devel gettext-devel \
-        openssl-devel zlib-devel
-    $ sudo apt-get install libcurl4-gnutls-dev libexpat1-dev gettext \
-        libz-dev libssl-dev 
+  1)Flutter Framework：
+    这是一个纯 Dart 实现的 SDK ，它实现了一套基础库，自底向上。
 
-    能够添加更多格式的文档（如 doc, html, info），你需要安装以下的依赖包
-    $ sudo yum install asciidoc xmlto docbook2x
-    $ sudo apt-get install asciidoc xmlto docbook2x
+    底下两层（ Foundation 和 Animation、Painting、Gestures）在Google的一些视频中被合并为一个 dart UI 层，对应的是 Flutter 中的 dart:ui 包，
+    它是 Flutter 引擎暴露的底层 UI 库，提供动画、手势及绘制能力。
 
-    编译并安装
-    $ tar -zxf git-2.0.0.tar.gz
-    $ cd git-2.0.0
-    $ make configure
-    $ ./configure --prefix=/usr
-    $ make all doc info
-    $ sudo make install install-doc install-html install-info
+    Rendering 层，这一层是一个抽象的布局层，它依赖于 dart UI 层，Rendering 层会构建一个 UI 树，当 UI 树有变化时，会计算出有变化的部分，然后
+    更新 UI 树，最终将 UI 树绘制到屏幕上，这个过程类似于 React 中的虚拟 DOM。Rendering 层可以说是 Flutter UI 框架最核心的部分，它除了确定每个
+    UI 元素的位置、大小之外还要进行坐标变换、绘制(调用底层dart:ui)。
 
-    完成后，你可以使用 Git 来获取 Git 的升级
-    $ git clone git://git.kernel.org/pub/scm/git/git.git
+    Widgets 层是 Flutter 提供的的一套基础组件库，在基础组件库之上，Flutter 还提供了 Material 和 Cupertino 两种视觉风格的组件库。而我们 Flutter 
+    开发的大多数场景，只是和这两层打交道。
 
-初次运行 Git 前的配置：
-1)三种配置文件
+  2)Flutter Engine：
+    这是一个纯 C++实现的 SDK，其中包括了 Skia引擎、Dart运行时、文字排版引擎等。在代码调用 dart:ui库时，调用最终会走到Engine层，然后实现真正的绘制逻辑。
 
-    /etc/gitconfig 文件: 包含系统上每一个用户及他们仓库的通用配置。 如果使用带有 --system 选项的 git config 时，它会从此文件读写配置变量。
-    ~/.gitconfig 或 ~/.config/git/config 文件：只针对当前用户。 可以传递 --global 选项让 Git 读写此文件。
-    当前使用仓库的 Git 目录中的 config 文件（就是 .git/config）：针对该仓库。
-
-2)用户信息
-
-    $ git config --global user.name "LeeChunJun"
-    $ git config --global user.email 1772043675@qq.com
-
-3)文本编辑器
-
-    $ git config --global core.editor emacs
-
-4)检查配置信息
-
-    $ git config user.name
-
-获取帮助:
-$ git help <verb>
-
-
-// 2.基础
-
-获取 Git 仓库：
-1)在现有项目或目录下导入所有文件到 Git 中
-
-    $ git init
-    $ git add LICENSE
-    $ git commit -m 'initial project version'
-
-2)从一个服务器克隆一个现有的 Git 仓库
-
-    // 默认配置下远程Git仓库中的每一个文件的每一个版本都将被拉取下来。
-    $ git clone https://github.com/libgit2/libgit2 mylibgit
-
-记录每次更新到仓库：
-1)工作目录下的每一个文件都不外乎这两种状态：已跟踪或未跟踪。
-
-    已跟踪的文件：指那些被纳入了版本控制的文件，在上一次快照中有它们的记录，在工作一段时间后，它们的状态可能处于未修改，已修改或已放入暂存区。
-    未跟踪的文件：工作目录中除已跟踪文件以外的所有其它文件都属于未跟踪文件，它们既不存在于上次快照的记录中，也没有放入暂存区。 初次克隆某个
-                仓库的时候，工作目录中的所有文件都属于已跟踪文件，并处于未修改状态。
-
-2)检查当前文件状态：
-
-    $ git status
-
-3)跟踪新文件：
-
-    $ git add README
-
-4)暂存已修改文件
-
-    $ git add CONTRIBUTING.md
-    $ git status
-
-5)状态简览
-
-    $ git status -s
-    A  lib/git.rb -> 新添加到暂存区中的文件前面有 A 标记
-    M  lib/simplegit.rb -> 修改过的文件前面有 M 标记，出现在靠左边的 M 表示该文件被修改了并放入了暂存区
-    ?? LICENSE.txt -> 新添加的未跟踪文件前面有 ?? 标记
-     M README -> 出现在右边的 M 表示该文件被修改了但是还没放入暂存区
-    MM Rakefile -> 在暂存区和工作区都有该文件被修改了的记录。
-
-6)忽略文件
-
-    创建一个名为 .gitignore 的文件，列出要忽略的文件模式，文件 .gitignore 的格式规范如下：
-    1)所有空行或者以 # 开头的行都会被 Git 忽略。
-    2)可以使用标准的 glob 模式匹配。
-    3)匹配模式可以以（/）开头防止递归。
-    4)匹配模式可以以（/）结尾指定目录。
-    5)要忽略指定模式以外的文件或目录，可以在模式前加上惊叹号（!）取反。
-
-    所谓的 glob 模式是指 shell 所使用的简化了的正则表达式。 
-    星号（*）匹配零个或多个任意字符；
-    [abc] 匹配任何一个列在方括号中的字符（这个例子要么匹配一个 a，要么匹配一个 b，要么匹配一个 c）；
-    问号（?）只匹配一个任意字符；
-    如果在方括号中使用短划线分隔两个字符，表示所有在这两个字符范围内的都可以匹配（比如 [0-9] 表示匹配所有 0 到 9 的数字）；
-    使用两个星号（*) 表示匹配任意中间目录，比如 a/**/z 可以匹配 a/z , a/b/z 或 a/b/c/z 等。
-
-7)查看已暂存和未暂存的修改
-
-    当前做的哪些更新还没有暂存？ 有哪些更新已经暂存起来准备好了下次提交？
-    此命令比较的是工作目录中当前文件和暂存区域快照之间的差异， 也就是修改之后还没有暂存起来的变化内容。
-    $ git diff
-    若要查看已暂存的将要添加到下次提交里的内容，可以用：
-    $ git diff --cached
-
-8)提交更新
-
-    每次准备提交前，先用 git status 看下，是不是都已暂存起来了， 然后再运行提交命令 git commit：
-    $ git commit
-    也可以在 commit 命令后添加 -m 选项，将提交信息与命令放在同一行：
-    $ git commit -m "Story 182: Fix benchmarks for speed"
-
-9)跳过使用暂存区域
-
-    Git 提供了一个跳过使用暂存区域的方式， 只要在提交的时候，给 git commit 加上 -a 选项，Git 就会
-    自动把所有已经跟踪过的文件暂存起来一并提交，从而跳过 git add 步骤：
-    $ git commit -a
-
-10)移除文件
-
-    $ rm PROJECTS.md
-    $ git rm PROJECTS.md
-    如果删除之前修改过并且已经放到暂存区域的话，则必须要用强制删除选项 -f（译注：即 force 的首字母）。 
-    这是一种安全特性，用于防止误删还没有添加到快照的数据，这样的数据不能被 Git 恢复。
-
-    我们想把文件从 Git 仓库中删除（亦即从暂存区域移除），但仍然希望保留在当前工作目录中。 
-    换句话说，你想让文件保留在磁盘，但是并不想让 Git 继续跟踪。
-    $ git rm --cached README
-
-11)移动文件
-
-    $ git mv README.md README
-    ->
-    $ mv README.md README
-    $ git rm README.md
-    $ git add README
-
-查看提交历史：
-
-    默认不用任何参数的话，git log 会按提交时间列出所有的更新
-    $ git log
-    一个常用的选项是 -p，用来显示每次提交的内容差异。 你也可以加上 -2 来仅显示最近两次提交
-    $ git log -p -2
-    如果你想看到每次提交的简略的统计信息，你可以使用 --stat 选项
-    $ git log --stat
-    可以指定使用不同于默认格式的方式展示提交历史
-    $ git log --pretty=oneline
-    $ git log --pretty=format:"%h - %an, %ar : %s"
-    $ git log --pretty=format:"%h %s" --graph
-
-撤消操作:
-1)重新提交
-
-    有时候我们提交完了才发现漏掉了几个文件没有添加，或者提交信息写错了。 此时，可以运行带有 --amend 选项的提交命令尝试重新提交：
-    $ git commit -m 'initial commit'
-    $ git add forgotten_file
-    $ git commit --amend
-
-2)取消暂存的文件
-
-    $ git reset HEAD CONTRIBUTING.md
-
-3)撤消对文件的修改
-
-    git checkout -- CONTRIBUTING.md
-
-远程仓库的使用:
-1)查看远程仓库
-
-    $ git clone https://github.com/schacon/ticgit
-    Cloning into 'ticgit'...
-    remote: Reusing existing pack: 1857, done.
-    remote: Total 1857 (delta 0), reused 0 (delta 0)
-    Receiving objects: 100% (1857/1857), 374.35 KiB | 268.00 KiB/s, done.
-    Resolving deltas: 100% (772/772), done.
-    Checking connectivity... done.
-    $ cd ticgit
-    $ git remote -v
-    origin  https://github.com/LeeChunJun/Notes.git (fetch)
-    origin  https://github.com/LeeChunJun/Notes.git (push)
-
-2)添加远程仓库
-
-    $ git remote
-    origin
-    $ git remote add pb https://github.com/paulboone/ticgit
-    $ git remote -v
-    origin	https://github.com/schacon/ticgit (fetch)
-    origin	https://github.com/schacon/ticgit (push)
-    pb	https://github.com/paulboone/ticgit (fetch)
-    pb	https://github.com/paulboone/ticgit (push)
-
-3)从远程仓库中抓取与拉取
-
-    注意 git fetch 命令会将数据拉取到你的本地仓库 - 它并不会自动合并或修改你当前的工作。 当准备好时你必须手动将其合并入你的工作。
-    $ git fetch [remote-name]
-    从最初克隆的服务器上抓取数据并自动尝试合并到当前所在的分支。
-    $ git pull [remote-name]
-
-4)推送到远程仓库
-
-    git push [remote-name] [branch-name]
-    $ git push origin master
-
-5)查看远程仓库
-
-    git remote show [remote-name]
-
-6)远程仓库的移除与重命名
-
-    $ git remote rename pb paul
-    $ git remote
-    origin
-    paul
-
-打标签：
-1)列出标签
-
-    $ git tag
-    v0.1
-    v1.3
-
-2)创建标签
-
-    Git 使用两种主要类型的标签：轻量标签（lightweight）与附注标签（annotated）。
-    一个轻量标签很像一个不会改变的分支 - 它只是一个特定提交的引用。
-    附注标签是存储在 Git 数据库中的一个完整对象。 它们是可以被校验的；
-    其中包含打标签者的名字、电子邮件地址、日期时间；还有一个标签信息；
-    并且可以使用 GNU Privacy Guard （GPG）签名与验证。 
-
-3)附注标签
-
-    运行 tag 命令时指定 -a 选项：
-    $ git tag -a v1.4 -m 'my version 1.4'
-    $ git tag
-    v0.1
-    v1.3
-    v1.4
-    -m 选项指定了一条将会存储在标签中的信息。 如果没有为附注标签指定一条信息，Git 会运行编辑器要求你输入信息。
-
-4)轻量标签
-
-    轻量标签本质上是将提交校验和存储到一个文件中 - 没有保存任何其他信息。 
-    创建轻量标签，不需要使用 -a、-s 或 -m 选项，只需要提供标签名字：
-    $ git tag v1.4-lw
-    $ git tag
-    v0.1
-    v1.3
-    v1.4
-    v1.4-lw
-    v1.5
-
-5)后期打标签
-
-    $ git tag -a v1.2 9fceb02
-
-6)共享标签
-
-    git push 命令并不会传送标签到远程仓库服务器上。 在创建完标签后你必须显式地推送标签到共享服务器上。
-    $ git push origin [tagname]
-
-    一次性推送很多标签
-    $ git push origin --tags
-    Counting objects: 1, done.
-    Writing objects: 100% (1/1), 160 bytes | 0 bytes/s, done.
-    Total 1 (delta 0), reused 0 (delta 0)
-    To git@github.com:schacon/simplegit.git
-    * [new tag]         v1.4 -> v1.4
-    * [new tag]         v1.4-lw -> v1.4-lw
-
-7)删除标签
-
-    标签删除 ->git tag -d <tagname>
-    $ git tag -d v1.4-lw
-    Deleted tag 'v1.4-lw' (was e7d5add)
-
-    远程标签删除 -> git push <remote> :refs/tags/<tagname>
-    $ git push origin :refs/tags/v1.4-lw
-    To /git@github.com:schacon/simplegit.git
-    - [deleted]         v1.4-lw
-
-8)检出标签
-
-    如果你想查看某个标签所指向的文件版本，可以使用 git checkout 命令
-
-Git 别名：
-
-    Git 并不会在你输入部分命令时自动推断出你想要的命令。
-    如果不想每次都输入完整的 Git 命令，可以通过 git config 文件来轻松地为每一个命令设置一个别名。 
-
-    $ git config --global alias.co checkout
-    $ git config --global alias.br branch
-    $ git config --global alias.ci commit
-    $ git config --global alias.st status
-
-   这意味着，当要输入 git commit 时，只需要输入 git ci
