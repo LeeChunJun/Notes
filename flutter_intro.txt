@@ -114,3 +114,107 @@ Flutter：
     3)自绘UI+原生               调用系统API渲染  性能好      Flutter高, QT低   默认不支持      框架代表：QT、Flutter
 
 // 2.Flutter简介
+
+跨平台自绘引擎：
+
+  Flutter既不使用WebView，也不使用操作系统的原生控件。 相反，Flutter使用自己的高性能渲染引擎来绘制widget。这样不仅可以保证在Android和iOS上UI
+  的一致性，而且也可以避免对原生控件依赖而带来的限制及高昂的维护成本。
+
+  Flutter使用Skia作为其2D渲染引擎，Skia是Google的一个2D图形处理函数库，包含字型、坐标转换，以及点阵图都有高效能且简洁的表现，Skia是跨平台的，
+  并提供了非常友好的API，目前Google Chrome浏览器和Android均采用Skia作为其绘图引擎。
+
+  默认支持 iOS、Android、Fuchsia 以及 Web开发（Flutter for web）和PC开发
+
+高性能：
+  1)Flutter APP 采用 Dart 语言开发。Dart 在 JIT（即时编译）模式下，速度与 JavaScript基本持平。
+    同时， Dart支持 AOT ，当以 AOT模式运行时，JavaScript便远远追不上了。速度的提升对高帧率下的视图数据计算很有帮助。
+  2)Flutter 使用自己的渲染引擎来绘制UI，布局数据等由 Dart 语言直接控制，所以在布局过程中不需要像 RN 那样要在 JavaScript 和 Native 之间通信，
+    这在一些滑动和拖动的场景下具有明显优势，因为在滑动和拖动过程往往都会引起布局发生变化，所以 JavaScript 需要和 Native 之间不停的同步布局信息，
+    这和在浏览器中要 JavaScript 频繁操作 DOM 所带来的问题是相同的，都会带来比较可观的性能开销。
+
+采用Dart语言开发：
+
+  1)JIT：
+    解释执行的则是一句一句边翻译边运行，通常将这种类型称为JIT（Just-in-time）即“即时编译”。
+  2)AOT：
+    静态编译的程序在执行前全部被翻译为机器码，通常将这种类型称为AOT （Ahead of time）即 “提前编译”；
+  
+  需要注意的是 JIT 和 AOT 指的是程序运行方式，和编程语言并非强关联的，有些语言既可以以 JIT 方式运行也可以以 AOT 方式运行，如 Java、Python，它们
+  可以在第一次执行时编译成中间字节码、然后在之后执行时可以直接执行字节码
+
+Flutter为什么选择Dart语言：
+
+  1)开发效率高
+    基于 JIT 的快速开发周期：Flutter在开发阶段采用 JIT 模式，这样就避免了每次改动都要进行编译，极大的节省了开发时间；
+    基于 AOT 的发布包: Flutter在发布时可以通过 AOT 生成高效的 ARM 代码以保证应用性能。而 JavaScript 则不具有这个能力。
+
+  2)高性能
+    Flutter中需要能够在每个动画帧中运行大量的代码。这意味着需要一种既能提供高性能的语言，而不会出现会丢帧的周期性暂停。
+
+  3)快速内存分配
+  4)类型安全
+    Dart本身就支持静态类型
+
+Flutter框架结构：
+
+  1)Flutter Framework：
+    这是一个纯 Dart 实现的 SDK ，它实现了一套基础库，自底向上。
+
+    底下两层（ Foundation 和 Animation、Painting、Gestures）在Google的一些视频中被合并为一个 dart UI 层，对应的是 Flutter 中的 dart:ui 包，
+    它是 Flutter 引擎暴露的底层 UI 库，提供动画、手势及绘制能力。
+
+    Rendering 层，这一层是一个抽象的布局层，它依赖于 dart UI 层，Rendering 层会构建一个 UI 树，当 UI 树有变化时，会计算出有变化的部分，然后
+    更新 UI 树，最终将 UI 树绘制到屏幕上，这个过程类似于 React 中的虚拟 DOM。Rendering 层可以说是 Flutter UI 框架最核心的部分，它除了确定每个
+    UI 元素的位置、大小之外还要进行坐标变换、绘制(调用底层dart:ui)。
+
+    Widgets 层是 Flutter 提供的的一套基础组件库，在基础组件库之上，Flutter 还提供了 Material 和 Cupertino 两种视觉风格的组件库。而我们 Flutter 
+    开发的大多数场景，只是和这两层打交道。
+
+  2)Flutter Engine：
+    这是一个纯 C++实现的 SDK，其中包括了 Skia引擎、Dart运行时、文字排版引擎等。在代码调用 dart:ui库时，调用最终会走到Engine层，然后实现真正的绘制逻辑。
+
+// 3.搭建Flutter开发环境
+
+  由于 Flutter 会同时构建 Android 和 IOS 两个平台的发布包，所以 Flutter 同时依赖 Android SDK 和 iOS SDK，在安装 Flutter 时也需要安装相应平台的构建工具和 SDK。
+
+  在 Windows 上搭建 Flutter 开发环境
+  1)用户环境变量：
+    export PUB_HOSTED_URL=https://pub.flutter-io.cn
+    export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+  2)获取Flutter SDK
+
+  在 macOS 上搭建 Flutter 开发环境
+  1)安装 bash、mkdir、rm、git、curl、unzip、which
+  2)获取 Flutter SDK
+    cd ~/development
+    unzip ~/Downloads/flutter_macos_v0.5.1-beta.zip
+    export PATH=`pwd`/flutter/bin:$PATH
+  3)永久生效
+    Flutter SDK的目录记为“FLUTTER_INSTALL_PATH”
+    vi $HOME/.bash_profile
+    export PATH=[FLUTTER_INSTALL_PATH]/flutter/bin:$PATH
+    source $HOME/.bash_profile
+
+  升级 Flutter：
+    Flutter SDK 有多个分支，如beta、dev、master、stable，其中stable分支为稳定分支。
+    flutter channel 查看所有分支
+    flutter channel beta 或 flutter channel master 切换分支
+
+  升级 Flutter SDK
+    flutter upgrade
+  升级依赖包
+    flutter packages get 获取项目所有的依赖包。
+    flutter packages upgrade 获取项目所有依赖包的最新版本。
+
+  Hot Reload 热重载失效问题：
+    在给 Terminal 之类的终端模拟器设置代理之后，会导致“Hot Reload”重载失效，此时调用 Save (cmd-s / ctrl-s)将不会进行热重载，热重载按钮 (带有闪电⚡️图标的按钮)也不会显示，
+    将代理移除即可解决。
+
+    另外，有些情况下热重载是不生效的，比如修改了main函数、修改了全局静态方法等，读者可以认为“Hot Reload”只会重新构建整个widget树，如果变动不在构建widget树的过程中，
+    “Hot Reload”就不会起作用。
+
+// 4.Dart语言简介
+
+  
+
+  
