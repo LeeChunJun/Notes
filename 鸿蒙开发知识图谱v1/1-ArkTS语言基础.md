@@ -162,4 +162,214 @@ function testClosure() {
 
 # 面向对象编程
 
+## 类的字段
+
+> `[readonly] 实例字段名 [: 数据类型] [= 初始值]` 实例字段
+> `static [readonly] 静态字段 [: 数据类型] [= 初始值]` 静态字段
+
+## 类的方法
+```
+实例方法名([参数列表]) [: 返回类型] {
+    方法体
+}
+
+static 静态方法名([参数列表]) [: 返回类型] {
+    方法体
+}
+```
+
+## 对象字面量
+```ts
+let person: Person; // 使用对象字面量时候，一定要先知道对象的实际类型。即对象字面量需要在编译器可以推断出其类型的上下文中使用
+
+person = {name: 'Mike', age: 23, email: '1772043675@qq.com'}
+```
+
+## 封装
+
+> `set xxX(value: yyy)` 设置属性
+> `get xxX()` 获取属性
+
+## 继承
+
+> `class 子类 extends 父类 {}`
+> `super({参数列表})`
+
+## 多态
+
+## 抽象类
+
+## 接口
+```ts
+// 将对象字面量作为接口类型的实例
+
+interface Person {
+    name: string;
+    age: number;
+    email?: string;// 可选
+}
+
+function printPersonInfo(person: Person) {
+    //...
+}
+
+function test() {
+    printPersonInfo({name: 'Alice', age: 18})
+}
+
+// 注意，把一个对象字面量作为接口类型的实例时，接口不能包含方法
+```
+
+# 空安全
+
+## 空安全的概念
+> `id: number | null = null` 初始值为 null
+> `age?: number;` 初始值为 undefined
+
+## 空安全的特性
+> 可选链：`user.profile?.address?.city`
+> 非空断言操作符：`person.id!.toString`
+> 空值合并操作符：`person.age ?? 20`
+
+# 错误处理
+
+## try-catch-finally 语句
+> `console.log(message: string, ...arguments: any[]): void` 控制台函数定义。
+> 即使 `try 块`或者 `catch 块`中包含 `return 语句`, `finally 块` 仍然会执行。
+> 如果 `finally 块` 包含 `return 语句`，那么该语句返回的值会覆盖 `try 块`或者 `catch 块` 中的 `return 语句` 所返回的值。
+
+## 使用 throw 手动抛出错误
+> throw 错误类的对象：`throw new RangeError('缓冲区大小必须在 1 到 1024')`
+> 继承自 `Error`，创建自定义错误类对象
+
+# 容器
+
+## 数组
+> `filter` 筛选元素，返回新数组。`numbers.filter((element, index, array) => {})` filter 的完整参数。
+> `map` 转换元素，返回新数组。`numbers.map((element, index, array) => {})`
+> `reduce` 将数组中的所有元素归纳为单个值。`numbers.reduce((accumulator, currentValue, index, array) => {}, initialValue)`
+> `forEach` 遍历数组中的每一个元素并对每一个元素执行提供的回调函数。`numbers.forEach((element, index, array) => {})`
+> `find` 查找数组中满足提供的回调函数条件的第一个元素，没有找到时返回 `undefined`。`numbers.find((element, index, array) => {})`
+> `sort` 对数组的元素进行原地排序（直接修改原数组），并返回排序后的数组。接收一个比较函数 `compareFunction` 作为参数，小于0，升序；等于零不变；大于零降序
+
+```ts
+// 利用 reduce 来实现更复杂数据结构的转换
+
+interface Product {
+    name: string;
+    quantity: number;
+}
+
+function test() {
+    const items: Product[] = [
+        { name: 'Apple', quantity: 2 },
+        { name: 'Banana', quantity: 5 },
+        { name: 'Orange', quantity: 3 },
+    ];
+
+    const itemMap = items.reduce((accumulator, item) => {
+        accumulator[item.name] = item.quantity;
+        return accumulator;
+    }, new Map<string, number>());
+
+    // 输出：['Apple': 2, 'Banana': 5, 'Orange': 3]
+    console.log(JSON.stringify(itemMap));
+}
+```
+
+## 元组
+> let numbers: [number, ...string[]] = [1, 'one', 'two', 'three']; 允许存储固定数量的元素，且这些元素的类型不必相同
+
+## Set
+> 存储唯一值的无序集合。JSON.stringify 无法将一个 Set 对象转换成 JSON 字符串
+
+```ts
+const numSet = new Set([1, 2, 3, 4, 5]) // 使用数组来初始化
+
+// 输出：[1, 2, 3, 4, 5]
+console.log(JSON.stringify(Array.from(numSet))) // 通过 Array.from 先将 Set 对象转换为数组，再使用 JSON.stringify 转换为 JSON 字符串
+```
+
+## Map
+> 存储键值对。JSON.stringify 无法将一个 Map 对象转换成 JSON 字符串
+
+```ts
+const fruitMap = new Map<string, number>([
+    ['apple', 2],
+    ['banana', 3],
+    ['cherry', 4],
+]) // 使用二维数组来初始化
+
+// 输出：[['apple', 2], ['banana', 3], ['cherry', 4]]
+console.log(JSON.stringify(Array.from(fruitMap)))
+
+// 注意 forEach 的回调函数接收的两个参数，分别是当前 `值和键`
+fruitMap.forEach((value, key) => {
+    console.log(`${key}: ${value}`);
+})
+```
+
+## Record
+> 与 `Map` 类似，可以`存储键值对`，但是有以下限制：
+- `Map` 可以存储任意类型的键值对，而 `Record` 的键只能时 `string` 或 `number` 类型，例如，`枚举`类型。
+- `Map` 不可以作为对象字面量的类型，而 `Record` 可以
+- `Map` 可以在运行时动态地添加、修改或删除键值对，而 `Record` 不可以，确定后不能修改。
+
+## 其余容器类
+> `线性`：
+- ArrayList: 构造动态数组
+- List: 构造单向列表
+- LinkedList: 构造双向列表
+- Queue: 构造单端队列
+- Stack: 构造栈
+
+> `非线性`
+- HashMap: 基于哈希表的 Map
+- HashSet: 基于哈希表的 Set
+- TreeMap: 基于红黑树的 Map
+- TreeSet: 基于红黑树的 Set
+- LightWeightMap: 构造轻量级的 Map
+- LightWeightSet: 构造轻量级的 Set
+
+# 泛型
+
+## 泛型函数
+> 一个函数顶一个一个或多个类型形参
+
+## 泛型类型
+- 泛型类：一个类定义了一个或多个类型形参
+- 泛型接口：一个接口定义了一个或多个类型形参
+
+# 导出和导入
+
+## 顶层声明的导出和导入
+
+> 想要在一个 `ets` 文件中访问另一个 `ets` 文件的顶层声明，就必须要使用关键字 `export` 显示地导出这些顶层声明，然后在其它 `ets` 文件中使用 `import` 语句来导入它们。包含 `export` 语句或者 `import` 语句的 `ets` 文件，被视为一个模块。
+> `import` 语句前面不能有任何非 `import` 语句。
+> `import { 顶层声明1， 顶层声明2， 顶层声明3，... } from 模块的路径`
+> `import { 顶层声明 as 新名称 } from 模块的路径` 使用重命名应对不同模块中相同名字的顶层声明
+> `import * as 模块的新名称 from 模块的新路径` 使用 `模块的新名称.顶层声明` 的格式访问
+> 每个模块都可以使用关键字 `export` 和 `default` 默认导出`一个`顶层声明。注意：导入时不能将其放入花括号中。
+```ts
+// 文件名 Test.ets
+export default interface Identifiable {
+    id: number;
+}
+
+// Test 中只有一个 `export default`, 因此不用花括号。
+import Idable fomr '../Test' 
+
+import 顶层声明的原名称或新名称 from 模块的路径 // 导入时不能将其放入花括号中
+```
+
+## 导入 SDK 的开放能力
+
+> 导入 Kit 下单个模块的接口能力
+`import { AbilityState } from '@kit.AbilityState'`
+
+> 导入 Kit 下多个模块的接口能力
+`import { AbilityState, UIExtensionAbility } from '@kit.AbilityState'`
+
+> 导入 Kit 包含的所有模块的接口能力（会导入过多无用模块，导致编译后的 HAP 包过大，谨慎使用）
+`import * as 所有模块的别名 from  '@kit.AbilityState'`
 
