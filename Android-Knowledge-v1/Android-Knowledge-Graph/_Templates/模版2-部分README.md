@@ -2,7 +2,7 @@
 tags: [android, part]
 part:
 ---
-# {{ 第 X 部分：}}
+# 第 X 部分：
 
 ## 概览
 
