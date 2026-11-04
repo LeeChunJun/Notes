@@ -5,7 +5,7 @@ status: 待整理
 difficulty: 中级
 created: 2026-11-04
 updated: 2026-11-04
-related: "[[LiveData与StateFlow]], [[../架构模式/MVVM]], [[../依赖注入/Hilt]]"
+related: "[[Lifecycle]], [[LiveData与StateFlow]], [[../架构模式/MVVM]], [[../依赖注入/Hilt]]"
 ---
 
 # Lifecycle与ViewModel
@@ -13,6 +13,10 @@ related: "[[LiveData与StateFlow]], [[../架构模式/MVVM]], [[../依赖注入/
 ## 一句话定义
 
 Lifecycle 是**感知组件生命周期状态变化**的框架，ViewModel 是**依附于生命周期、跨配置变更存活、且可被依赖注入**的状态持有者；两者共同构成 MVVM 的"骨架"。
+
+> [!note] 笔记分工
+> 本篇聚焦 **ViewModel 侧**：存活范围、`viewModelScope`、`SavedStateHandle`、依赖注入。
+> **Lifecycle 框架本身**（事件与状态的两套语义、`LifecycleRegistry` 状态机引擎、观察者 catch-up、`repeatOnLifecycle` 源码级实现、`ProcessLifecycleOwner`、自定义 `LifecycleOwner`）见 [[Lifecycle]]。
 
 ## 核心原理
 
@@ -310,6 +314,8 @@ fun Bad() {
    - `repeatOnLifecycle` 是**取消上游**，回到可见时**重新订阅**，上游会**从头执行**（所以 Flow 若是 `flow { emit(...) }` 会重新请求）。
    - 需要"最新值不丢"时，StateFlow 因为自带**粘性**（始终有 `value`）表现得更好。
 
+   > `repeatOnLifecycle` 的源码级原理（观察者注册、取消与重启时机）、与 `flowWithLifecycle` 的对比，见 [[Lifecycle]]。
+
 ---
 
 **读者问：ViewModel 能持有 Context 吗？`AndroidViewModel` 有什么用？**
@@ -370,6 +376,7 @@ sealed interface Event { data object RequestInput : Event }
 
 ## 关联笔记
 
+- [[Lifecycle]]：Lifecycle 状态机、生命周期感知协程与 `repeatOnLifecycle` 的完整拆解
 - [[LiveData与StateFlow]]：状态载体与生命周期感知
 - [[../架构模式/MVVM]]：ViewModel 在 MVVM 中的角色
 - [[../依赖注入/Hilt]]：`hiltViewModel()` 的原理
