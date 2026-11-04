@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lifecycle_learn_title">Lifecycle 实践学习</string>
+    <string name="lifecycle_learn_subtitle">通过两个小例子掌握 androidx.lifecycle 的用法</string>
+
+    <string name="entry_count_down">示例一：页面倒计时\nCountDownTimer + Lifecycle 生命周期感知</string>
+    <string name="entry_dialog">示例二：自定义 LifecycleOwner\n解决弹窗在 Activity 销毁时未及时关闭的问题</string>
+
+    <string name="label_lifecycle_log">当前页面生命周期事件</string>
+    <string name="lifecycle_log_empty">（等待生命周期事件…）</string>
+
+    <string name="count_down_title">页面倒计时</string>
+    <string name="count_down_tip">点击上方的倒计时数字即可跳过</string>
+    <string name="count_down_skip">跳 过</string>
+    <string name="count_down_restart">重新开始</string>
+    <string name="count_down_idle">倒计时准备中</string>
+    <string name="count_down_running">倒计时运行中（页面可见时才计时）</string>
+    <string name="count_down_paused">页面不可见，倒计时已暂停</string>
+    <string name="count_down_finished">倒计时结束</string>
+    <string name="count_down_skipped">已跳过倒计时</string>
+
+    <string name="dialog_demo_title">自定义 LifecycleOwner 与弹窗</string>
+    <string name="dialog_show_safe">显示弹窗（自定义 LifecycleOwner 版）</string>
+    <string name="dialog_show_legacy">显示弹窗（旧写法：不做生命周期处理）</string>
+    <string name="dialog_finish_activity">销毁当前 Activity</string>
+    <string name="dialog_safe_desc">安全版：弹窗自身持有一个自定义 LifecycleOwner，宿主 Activity 销毁时自动 dismiss。</string>
+    <string name="dialog_legacy_desc">旧写法：弹窗只依赖 Activity 手动 dismiss，Activity 销毁时窗口会残留（WindowLeaked）。</string>
+    <string name="dialog_state_none">当前没有弹窗</string>
+    <string name="dialog_state_shown">弹窗已显示</string>
+    <string name="dialog_state_dismissed">弹窗已被自动关闭</string>
+
+    <string name="dialog_safe_title">这是一个安全弹窗</string>
+    <string name="dialog_safe_message">宿主 Activity 被销毁时，本弹窗会通过自定义 LifecycleOwner 收到 ON_DESTROY 事件并自动关闭。</string>
+    <string name="dialog_safe_confirm">知道了</string>
+</resources>

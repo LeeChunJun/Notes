@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <activity
+            android:name=".LifecycleLearnActivity"
+            android:exported="false"
+            android:label="@string/lifecycle_learn_title"
+            android:theme="@style/Theme.LifecycleLearn" />
+
+        <activity
+            android:name=".countdown.CountDownActivity"
+            android:exported="false"
+            android:label="@string/count_down_title"
+            android:theme="@style/Theme.LifecycleLearn" />
+
+        <activity
+            android:name=".dialog.DialogDemoActivity"
+            android:exported="false"
+            android:label="@string/dialog_demo_title"
+            android:theme="@style/Theme.LifecycleLearn" />
+
+    </application>
+
+</manifest>
