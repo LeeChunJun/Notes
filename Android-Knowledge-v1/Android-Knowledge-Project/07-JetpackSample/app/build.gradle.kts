@@ -32,6 +32,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":lifecycle_learn"))
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)

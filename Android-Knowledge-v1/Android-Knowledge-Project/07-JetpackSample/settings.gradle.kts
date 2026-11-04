@@ -24,4 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "JetpackSample"
 include(":app")
- 
+include(":lifecycle_learn")
