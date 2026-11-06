@@ -7,7 +7,6 @@ created: 2026-11-04
 updated: 2026-11-04
 related: "[[Lifecycle与ViewModel]], [[LiveData与StateFlow]], [[../架构模式/MVVM]]"
 ---
-
 # Lifecycle
 
 ## 一句话定义
@@ -18,12 +17,12 @@ Lifecycle 是 AndroidX 提供的**生命周期感知框架**：它把 Activity /
 
 ### 1. 三个核心角色
 
-| 角色 | 类型 | 职责 |
-| --- | --- | --- |
-| `LifecycleOwner` | 接口 | 持有者角色，只声明一个 `lifecycle: Lifecycle` 属性。`ComponentActivity`、`Fragment`、`Service` 都实现它 |
-| `Lifecycle` | 抽象类 | **状态机本体**：对外暴露当前 `State`、接收 `Event`、管理观察者集合 |
-| `LifecycleObserver` | 接口 | 观察者角色，回调生命周期变化。`DefaultLifecycleObserver` 是官方推荐实现 |
-| `LifecycleRegistry` | 实现类 | `Lifecycle` 的具体实现，**真正的状态机引擎**（事件分发、状态合并、观察者同步） |
+| 角色                  | 类型   | 职责                                                                                                            |
+| --------------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
+| `LifecycleOwner`    | 接口   | 持有者角色，只声明一个 `lifecycle: Lifecycle` 属性。`ComponentActivity`、`Fragment`、`Service` 都实现它 |
+| `Lifecycle`         | 抽象类 | **状态机本体**：对外暴露当前 `State`、接收 `Event`、管理观察者集合                                    |
+| `LifecycleObserver` | 接口   | 观察者角色，回调生命周期变化。`DefaultLifecycleObserver` 是官方推荐实现                                       |
+| `LifecycleRegistry` | 实现类 | `Lifecycle` 的具体实现，**真正的状态机引擎**（事件分发、状态合并、观察者同步）                          |
 
 关系一句话：
 
@@ -37,23 +36,23 @@ LifecycleOwner  ──持有──▶  Lifecycle  ◀──实现──  Lifecyc
 
 AndroidX 同时提供**两套语义**，各有用途：
 
-| 维度 | `Lifecycle.Event`（事件驱动） | `Lifecycle.State`（状态驱动） |
-| --- | --- | --- |
-| 语义 | "发生了什么"（离散、精确、有序） | "现在处于什么阶段"（连续、可比较） |
-| 取值 | `ON_CREATE` / `ON_START` / `ON_RESUME` / `ON_PAUSE` / `ON_STOP` / `ON_DESTROY`（+`ON_ANY`） | `INITIALIZED` / `CREATED` / `STARTED` / `RESUMED` / `DESTROYED` |
-| 判断方式 | 只能判断"是不是这个事件" | 可用 `isAtLeast()` 判断"是否已达到某阶段" |
-| 典型用途 | 需要精确知道"刚进后台/刚回前台" | `repeatOnLifecycle(STARTED)`、条件启停 |
+| 维度     | `Lifecycle.Event`（事件驱动）                                                                           | `Lifecycle.State`（状态驱动）                                           |
+| -------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 语义     | "发生了什么"（离散、精确、有序）                                                                          | "现在处于什么阶段"（连续、可比较）                                        |
+| 取值     | `ON_CREATE` / `ON_START` / `ON_RESUME` / `ON_PAUSE` / `ON_STOP` / `ON_DESTROY`（+`ON_ANY`） | `INITIALIZED` / `CREATED` / `STARTED` / `RESUMED` / `DESTROYED` |
+| 判断方式 | 只能判断"是不是这个事件"                                                                                  | 可用 `isAtLeast()` 判断"是否已达到某阶段"                               |
+| 典型用途 | 需要精确知道"刚进后台/刚回前台"                                                                           | `repeatOnLifecycle(STARTED)`、条件启停                                  |
 
 **状态与事件的映射表**（`Lifecycle.Event.getTargetState`）：
 
-| Event | 目标 State | 说明 |
-| --- | --- | --- |
-| `ON_CREATE` | `CREATED` | 对象已创建 |
-| `ON_START` | `STARTED` | 可见但未获焦点 |
-| `ON_RESUME` | `RESUMED` | 可见且在前台 |
-| `ON_PAUSE` | `STARTED` | 失去焦点（如弹对话框、跳到别的 Activity） |
-| `ON_STOP` | `CREATED` | 完全不可见 |
-| `ON_DESTROY` | `DESTROYED` | 终态，不可恢复 |
+| Event          | 目标 State    | 说明                                      |
+| -------------- | ------------- | ----------------------------------------- |
+| `ON_CREATE`  | `CREATED`   | 对象已创建                                |
+| `ON_START`   | `STARTED`   | 可见但未获焦点                            |
+| `ON_RESUME`  | `RESUMED`   | 可见且在前台                              |
+| `ON_PAUSE`   | `STARTED`   | 失去焦点（如弹对话框、跳到别的 Activity） |
+| `ON_STOP`    | `CREATED`   | 完全不可见                                |
+| `ON_DESTROY` | `DESTROYED` | 终态，不可恢复                            |
 
 完整状态机：
 
@@ -79,7 +78,7 @@ State:  INITIALIZED ──▶ CREATED ──▶ STARTED ──▶ RESUMED
 - `Event.downFrom(state)`：从某状态**向下**一步的事件（`RESUMED → ON_PAUSE`，`STARTED → ON_STOP`，`CREATED → ON_STOP`）。
 - `Event.getTargetState(event)`：事件对应的目标状态。
 
-> [!note] `ON_PAUSE` 与 `ON_STOP` 的区别
+> [!note] ✏️ `ON_PAUSE` 与 `ON_STOP` 的区别
 > 两者都会让状态离开 `RESUMED`，但 `ON_PAUSE` 只表示"失去焦点"（页面还可见），`ON_STOP` 表示"完全不可见"。**Android 8.0 之前存在"Activity 不可见但仍处于 RESUMED"的多窗口缺陷**，因此判断"是否还在前台"要用 `RESUMED` 而不是"有没有 `onPause`"。
 
 ### 3. `LifecycleRegistry`：状态机引擎
@@ -100,11 +99,11 @@ class LifecycleRegistry @JvmOverloads constructor(
 
 ### 4. 观察者的三种注册方式
 
-| 方式 | 说明 | 状态 |
-| --- | --- | --- |
-| `DefaultLifecycleObserver` | 声明式，按方法名对应事件，IDE 有提示 | **推荐**（需 `lifecycle-common-java8`） |
-| `LifecycleEventObserver` | 一个 `onStateChanged(owner, event)` 处理所有事件 | 需要按事件分支时用 |
-| `@OnLifecycleEvent` 注解 | 通过注解 + 反射调用方法 | **已废弃**，存在反射性能与混淆问题 |
+| 方式                         | 说明                                               | 状态                                            |
+| ---------------------------- | -------------------------------------------------- | ----------------------------------------------- |
+| `DefaultLifecycleObserver` | 声明式，按方法名对应事件，IDE 有提示               | **推荐**（需 `lifecycle-common-java8`） |
+| `LifecycleEventObserver`   | 一个 `onStateChanged(owner, event)` 处理所有事件 | 需要按事件分支时用                              |
+| `@OnLifecycleEvent` 注解   | 通过注解 + 反射调用方法                            | **已废弃**，存在反射性能与混淆问题        |
 
 `LifecycleEvent.ON_ANY` 可以用一个回调监听全部事件：
 
@@ -145,19 +144,39 @@ suspend fun Lifecycle.repeatOnLifecycle(
 4. 再次回到 `ON_START` → **重新启动** `block`；
 5. 宿主 `ON_DESTROY` → 结束整个 `repeatOnLifecycle`（函数返回）。
 
-> [!warning] 关键区别
+> [!warning] ⚠️ 关键区别
 > "掉出状态时**取消**、回到状态时**重新收集**"意味着：被取消期间 `StateFlow` 的新值会被 `StateFlow` 自己**缓存（replay）**，回到前台后能立刻拿到最新值；而 `SharedFlow`（无 replay）在这个窗口内发出的事件**会永久丢失**，所以一次性事件要用 `Channel`。
 
 #### `flowWithLifecycle` vs `repeatOnLifecycle`
 
-| | `flowWithLifecycle` | `repeatOnLifecycle` |
-| --- | --- | --- |
-| 回到前台时 | **不重新收集**，只是恢复对同一个上游流的订阅 | **重新收集**整个 `block` |
-| 上游是 `StateFlow` | 恢复后能拿到最新值 | 恢复后能拿到最新值 |
-| 上游是 `SharedFlow`（replay=0） | 恢复后**收不到**停机期间的事件 | 恢复后**也收不到**（因为重新订阅时事件已过） |
-| 适合 | 单个数据流的"可见才订阅" | 多流并发、需要在停机时**释放资源** |
+|                                   | `flowWithLifecycle`                              | `repeatOnLifecycle`                              |
+| --------------------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| 回到前台时                        | **不重新收集**，只是恢复对同一个上游流的订阅 | **重新收集**整个 `block`                   |
+| 上游是 `StateFlow`              | 恢复后能拿到最新值                                 | 恢复后能拿到最新值                                 |
+| 上游是 `SharedFlow`（replay=0） | 恢复后**收不到**停机期间的事件               | 恢复后**也收不到**（因为重新订阅时事件已过） |
+| 适合                              | 单个数据流的"可见才订阅"                           | 多流并发、需要在停机时**释放资源**           |
 
 > 面试标准答法：**`flowWithLifecycle` 是"订阅开关"，`repeatOnLifecycle` 是"作用域开关"**。需要同时管理多条流、且在不可见时释放资源（如停止动画、取消请求）时用后者。
+
+两者的核心区别在于**设计定位与使用场景**：`repeatOnLifecycle` 是一个**挂起函数**，用于在特定生命周期状态下执行任意代码块（通常用于收集多个 Flow）；而 `flowWithLifecycle` 是一个 **Flow 操作符**，专门用于让单个 Flow 具备生命周期感知能力，仅在活跃状态下发射数据。
+
+#### `repeatOnLifecycle` 与 `flowWithLifecycle` 对比
+
+| 特性               | `repeatOnLifecycle`                                                                                                        | `flowWithLifecycle`                                                                                                                  |
+| :----------------- | :--------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
+| **本质**     | 挂起函数（需在协程中调用）                                                                                                   | Flow 扩展操作符（返回新 Flow）                                                                                                         |
+| **作用对象** | 生命周期对象（`Lifecycle`）                                                                                                | Flow 对象                                                                                                                              |
+| **核心行为** | 当生命周期达到目标状态时，**启动新的协程**执行代码块；低于目标状态时**取消**该协程；再次达到时**重新启动** | 当生命周期达到目标状态时，**收集上游 Flow** 并向下游发射值；低于目标状态时**取消上游收集**（下游 Flow 本身仍活跃但不发射） |
+| **适用场景** | 需要**收集多个 Flow**，或需要在生命周期感知的代码块中执行**非 Flow 操作**（如配置任务）                          | 仅需**处理单个 Flow** 时，作为链式调用的一部分                                                                                   |
+| **资源开销** | **更优**。推荐用于多个 Flow 的场景，可为每个 Flow 单独 `launch`，无需创建热流                                        | 内部通过 `callbackFlow` 实现，会**创建热流**并引入缓冲区                                                                       |
+
+#### 选用建议
+
+**优先使用 `repeatOnLifecycle`**：当你需要同时监听多个数据流（例如同时观察 UI 状态和导航事件），或者在启动 Flow 收集前需要先执行一些一次性配置逻辑时，它更加灵活且资源消耗更少。
+
+**使用 `flowWithLifecycle`**：当你只处理单一数据流，且希望代码保持简洁的链式调用风格时（例如 `flow.flowWithLifecycle(...).collect { ... }`），它会非常方便。
+
+**注意**：`flowWithLifecycle` 仅取消**上游** Flow 的收集。如果在其后跟随了 `combine` 等操作符，下游操作符仍会保持活跃，因此操作符的**先后顺序**会影响行为。
 
 #### Compose 侧
 
@@ -183,16 +202,16 @@ ProcessLifecycleOwner.get().lifecycle.addObserver(observer)
 
 ### 7. 谁是 `LifecycleOwner`？
 
-| 实现者 | 生命周期范围 | 注意 |
-| --- | --- | --- |
-| `ComponentActivity` / `AppCompatActivity` | Activity 全程 | `onDestroy` 才结束 |
-| `Fragment` | Fragment 全程 | 视图销毁在 `onDestroyView`，**更早** |
-| `Fragment.viewLifecycleOwner` | Fragment 的**视图** | 自定义 View 里用它，不要用 `fragment` |
-| `Service`（`ServiceLifecycleOwner`） | Service 全程 | 配合 `LifecycleService` |
-| `ViewTreeLifecycleOwner` | 从 View 树向上找最近的 owner | 自定义 View 用它拿到 owner |
-| 自定义类 | 自己控制 | 用 `LifecycleRegistry` 手动驱动 |
+| 实现者                                        | 生命周期范围                 | 注意                                         |
+| --------------------------------------------- | ---------------------------- | -------------------------------------------- |
+| `ComponentActivity` / `AppCompatActivity` | Activity 全程                | `onDestroy` 才结束                         |
+| `Fragment`                                  | Fragment 全程                | 视图销毁在 `onDestroyView`，**更早** |
+| `Fragment.viewLifecycleOwner`               | Fragment 的**视图**    | 自定义 View 里用它，不要用 `fragment`      |
+| `Service`（`ServiceLifecycleOwner`）      | Service 全程                 | 配合 `LifecycleService`                    |
+| `ViewTreeLifecycleOwner`                    | 从 View 树向上找最近的 owner | 自定义 View 用它拿到 owner                   |
+| 自定义类                                      | 自己控制                     | 用 `LifecycleRegistry` 手动驱动            |
 
-> [!tip] `Fragment` 的两套生命周期
+> [!tip] 💡 `Fragment` 的两套生命周期
 > `Fragment` 同时实现两个 owner：`fragment`（整个 Fragment）和 `viewLifecycleOwner`（Fragment 的 View）。
 > 在 `Fragment` 里 `requireView()` 可能抛异常（视图已销毁），而且 Fragment 可能在返回栈里存活很久 → **在 Fragment 中绑定 UI（View、LiveData observe、协程）必须用 `viewLifecycleOwner`**，否则会造成视图泄漏。
 
@@ -414,13 +433,13 @@ viewLifecycleOwner.lifecycleScope.launch { ... }
 
 **AI答：**
 
-| | `lifecycleScope` | `viewModelScope` |
-| --- | --- | --- |
-| 归属 | `LifecycleOwner`（Activity / Fragment / 自定义） | `ViewModel` |
-| 取消时机 | 宿主 `ON_DESTROY` 时 | ViewModel `onCleared()` 时 |
-| 配置变更（旋转） | **会**被取消并重建 | **不会**被取消，ViewModel 保留 |
-| 存活长短 | 短 | 长 |
-| 适合 | UI 相关的短任务（动画、收集 UI 状态） | 业务逻辑、与 UI 无关的长任务（数据请求、轮询） |
+|                  | `lifecycleScope`                                 | `viewModelScope`                             |
+| ---------------- | -------------------------------------------------- | ---------------------------------------------- |
+| 归属             | `LifecycleOwner`（Activity / Fragment / 自定义） | `ViewModel`                                  |
+| 取消时机         | 宿主 `ON_DESTROY` 时                             | ViewModel `onCleared()` 时                   |
+| 配置变更（旋转） | **会**被取消并重建                           | **不会**被取消，ViewModel 保留           |
+| 存活长短         | 短                                                 | 长                                             |
+| 适合             | UI 相关的短任务（动画、收集 UI 状态）              | 业务逻辑、与 UI 无关的长任务（数据请求、轮询） |
 
 1. `lifecycleScope` 的 Job 是 `SupervisorJob()`，子协程失败不会连坐兄弟协程；取消时同样会取消所有子协程。
 2. **判断依据**：任务是否需要跨配置变更存活。需要 → `viewModelScope`；不需要 → `lifecycleScope`。
