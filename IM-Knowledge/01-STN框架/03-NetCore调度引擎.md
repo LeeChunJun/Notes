@@ -412,39 +412,59 @@ NetCore
 
 ## 14. `NetCore` 的 `__ChooseChannel` 完整逻辑
 
-`net_core.cc:296-324`（重述，带注释）：
+`net_core.cc:296-324`（原文）：
 
 ```cpp
-int NetCore::__ChooseChannel(const Task& _task, const std::string& _channel_name) {
-    int channel = Task::kChannelShort;
+int NetCore::__ChooseChannel(const Task& _task,
+                             std::shared_ptr<LongLinkMetaData> _longlink,
+                             std::shared_ptr<LongLinkMetaData> _minorLong) {
+    bool longlinkOk = (_longlink != nullptr);
+    longlinkOk = longlinkOk && LongLink::kConnected == _longlink->Channel()->ConnectStatus();
 
-    // 副长连优先级最高
-    if (_task.channel_select & Task::kChannelMinorLong) {
-        channel = Task::kChannelMinorLong;
-    }
-    // 全部通道
-    else if (_task.channel_select & Task::kChannelAll) {
-        channel = Task::kChannelLong;
-    }
-    // 长短皆可
-    else if (_task.channel_select & Task::kChannelBoth) {
-        channel = Task::kConnected ? Task::kChannelLong : Task::kChannelShort;
-    }
-    // 普通通道（副长连 > 短连，不含主长连）
-    else if (_task.channel_select & Task::kChannelNormal) {
-        channel = Task::kChannelShort;
+    if (longlinkOk && _task.channel_strategy == Task::kChannelFastStrategy) {
+        longlinkOk = longlinkOk
+                     && (longlink_task_manager_->GetTaskCount(_task.channel_name)
+                         <= kFastSendUseLonglinkTaskCntLimit);
     }
 
-    // Fast 策略：长连任务数超限则强制短连
-    if (_task.channel_strategy == Task::kChannelFastStrategy) {
-        if (longlink_task_manager_->GetTaskCount(_channel_name) > kFastSendUseLonglinkTaskCntLimit) {
-            channel = Task::kChannelShort;
-        }
+    bool minorOk = _task.minorlong_host_list.empty()
+                 ? false : longlink_task_manager_->IsMinorAvailable(_task);
+
+    int channel = _task.channel_select;
+    switch (_task.channel_select) {
+        case Task::kChannelAll:
+            channel = minorOk ? Task::kChannelMinorLong
+                              : (longlinkOk ? Task::kChannelLong : Task::kChannelShort);
+            break;
+        case Task::kChannelNormal:
+            channel = minorOk ? Task::kChannelMinorLong : Task::kChannelShort;
+            break;
+        case Task::kChannelBoth:
+            channel = longlinkOk ? Task::kChannelLong : Task::kChannelShort;
+            break;
+        default:
+            break;
     }
     return channel;
 }
 ```
 
-> ⚠️ `kChannelBoth` 的判断用的是 **`kConnected`**（`NetCore` 的连接状态变量），
-> 不是"此刻长连对象是否已连接"。这个状态由 `__ConnStatusCallBack` 更新，
-> 存在轻微延迟。**所以 `kChannelBoth` 的降级判断不是 100% 精确的。**
+| `channel_select` | 选路结果 |
+|---|---|
+| `kChannelShort(0x1)` | 短连（原样返回） |
+| `kChannelLong(0x2)` | 长连（原样返回） |
+| `kChannelMinorLong(0x4)` | 副长连（原样返回） |
+| `kChannelBoth(0x3)` | 长连已连接 → 长连；否则 → 短连 |
+| `kChannelNormal(0x5)` | 副长连可用 → 副长连；否则 → 短连 |
+| `kChannelAll(0x7)` | 副长连 > 长连 > 短连 |
+
+**两个要点**：
+
+1. **`longlinkOk` 直接读长连的实时状态**（`_longlink->Channel()->ConnectStatus()`），
+   **不是**读某个缓存的连接状态变量 → 选路判断是**精确的、无延迟的**。
+2. **降级发生在"选路时刻"**（`StartTask` 那一刻），不是"发送时刻"。
+   `kChannelBoth` 的任务一旦被分到短连，**即使 200ms 后长连连上了也不会改走长连**。
+
+> **IM 建议**：IM 消息用 `kChannelLong`（纯长连）。
+> 长连未连上时任务会留在队列里等，**不会丢，也不会降级到短连**（延迟劣化）。
+> 降级策略应由业务显式控制，而不是隐式。
