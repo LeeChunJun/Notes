@@ -7,14 +7,13 @@ created: 2026-11-04
 updated: 2026-11-04
 related: "[[Lifecycle]], [[LiveData与StateFlow]], [[../架构模式/MVVM]], [[../依赖注入/Hilt]]"
 ---
-
 # Lifecycle与ViewModel
 
 ## 一句话定义
 
 Lifecycle 是**感知组件生命周期状态变化**的框架，ViewModel 是**依附于生命周期、跨配置变更存活、且可被依赖注入**的状态持有者；两者共同构成 MVVM 的"骨架"。
 
-> [!note] 笔记分工
+> [!note] ✏️ 笔记分工
 > 本篇聚焦 **ViewModel 侧**：存活范围、`viewModelScope`、`SavedStateHandle`、依赖注入。
 > **Lifecycle 框架本身**（事件与状态的两套语义、`LifecycleRegistry` 状态机引擎、观察者 catch-up、`repeatOnLifecycle` 源码级实现、`ProcessLifecycleOwner`、自定义 `LifecycleOwner`）见 [[Lifecycle]]。
 
@@ -22,11 +21,11 @@ Lifecycle 是**感知组件生命周期状态变化**的框架，ViewModel 是**
 
 ### 1. Lifecycle 的两套 API
 
-| API | 说明 | 适用 |
-| --- | --- | --- |
-| `Lifecycle`（事件驱动） | 提供 `LifecycleEvent` 回调（`ON_CREATE`/`ON_START`/`ON_RESUME`/`ON_PAUSE`/`ON_STOP`/`ON_DESTROY`） | 需要精确感知每个阶段时 |
-| `LifecycleOwner` + `DefaultLifecycleObserver` | 声明式注册回调，生命周期结束自动解绑 | 常规场景，官方推荐 |
-| `Lifecycle.State`（状态驱动） | 只有 `CREATED` / `STARTED` / `RESUMED` 三态，是**状态机**的当前值 | 状态驱动的协程收集、`repeatOnLifecycle` |
+| API                                               | 说明                                                                                                             | 适用                                      |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `Lifecycle`（事件驱动）                         | 提供 `LifecycleEvent` 回调（`ON_CREATE`/`ON_START`/`ON_RESUME`/`ON_PAUSE`/`ON_STOP`/`ON_DESTROY`） | 需要精确感知每个阶段时                    |
+| `LifecycleOwner` + `DefaultLifecycleObserver` | 声明式注册回调，生命周期结束自动解绑                                                                             | 常规场景，官方推荐                        |
+| `Lifecycle.State`（状态驱动）                   | 只有 `CREATED` / `STARTED` / `RESUMED` 三态，是**状态机**的当前值                                    | 状态驱动的协程收集、`repeatOnLifecycle` |
 
 **六事件 vs 三状态** 的映射关系：
 
@@ -44,13 +43,13 @@ State:      CREATED ──────▶ STARTED ───▶ RESUMED
 
 这是面试高频考点，区别要讲清楚：
 
-| 机制 | 行为 | 典型场景 |
-| --- | --- | --- |
-| `LiveData.observe(owner)` | 页面 **不可见（STOPPED 之后）自动暂停分发**，回到可见自动**补发最新值** | 传统 View + MVVM |
-| `Flow + repeatOnLifecycle(STARTED)` | 收集协程在 STARTED 时启动、非 STARTED 时**取消**（不是挂起），回到 STARTED 重新收集 | Compose / 传统 View 协程 |
-| `Flow + collectAsStateWithLifecycle()` | 内部即 `repeatOnLifecycle(STARTED) + collectAsState` | Compose 推荐写法 |
+| 机制                                     | 行为                                                                                      | 典型场景                 |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------ |
+| `LiveData.observe(owner)`              | 页面 **不可见（STOPPED 之后）自动暂停分发**，回到可见自动**补发最新值**       | 传统 View + MVVM         |
+| `Flow + repeatOnLifecycle(STARTED)`    | 收集协程在 STARTED 时启动、非 STARTED 时**取消**（不是挂起），回到 STARTED 重新收集 | Compose / 传统 View 协程 |
+| `Flow + collectAsStateWithLifecycle()` | 内部即 `repeatOnLifecycle(STARTED) + collectAsState`                                    | Compose 推荐写法         |
 
-> [!warning] 常见坑
+> [!warning] ⚠️ 常见坑
 > 直接 `lifecycleScope.launch { flow.collect {} }` 在 STARTED 时启动，页面 STOPPED 仍会继续收集 → 后台也在发请求、也在更新 UI 变量。**必须用 `repeatOnLifecycle`**。
 
 ### 3. ViewModel 的生命周期与"存活范围"
@@ -272,11 +271,11 @@ class UserRepo(private val api: Api) {
 
 三者的**取消时机**和**存活周期**不同，这决定了它们该用在哪：
 
-| 作用域 | 取消时机 | 典型用途 | 注意 |
-| --- | --- | --- | --- |
-| `viewModelScope` | ViewModel 的 `onCleared()` | ViewModel 里发起的业务逻辑 | 跨配置变更不取消，适合"业务请求" |
-| `lifecycleScope` | Lifecycle `ON_DESTROY` | Activity/Fragment 里收集 Flow、动画 | 协程在 `ON_DESTROY` 时取消；**但收集本身要用 `repeatOnLifecycle(STARTED)` 控制开关** |
-| `rememberCoroutineScope` | Composable 离开组合 / 该 `remember` key 变化 | Compose 事件回调里发起的协程（如点击后动画） | **不能在 Composable 函数体里直接 `launch`**，因为重组会重启 |
+| 作用域                     | 取消时机                                       | 典型用途                                     | 注意                                                                                           |
+| -------------------------- | ---------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `viewModelScope`         | ViewModel 的 `onCleared()`                   | ViewModel 里发起的业务逻辑                   | 跨配置变更不取消，适合"业务请求"                                                               |
+| `lifecycleScope`         | Lifecycle `ON_DESTROY`                       | Activity/Fragment 里收集 Flow、动画          | 协程在 `ON_DESTROY` 时取消；**但收集本身要用 `repeatOnLifecycle(STARTED)` 控制开关** |
+| `rememberCoroutineScope` | Composable 离开组合 / 该 `remember` key 变化 | Compose 事件回调里发起的协程（如点击后动画） | **不能在 Composable 函数体里直接 `launch`**，因为重组会重启                            |
 
 1. **`viewModelScope` 关键点**：Activity 重建（旋转）时 ViewModel 存活 → **协程不取消**，请求结果不会因旋转而丢失。这是它与 `lifecycleScope` 最大的差别。
 2. **`lifecycleScope` 关键点**：默认 `Dispatchers.Main.immediate`；配合 `repeatOnLifecycle(Lifecycle.State.STARTED)` 使用，页面不可见时**取消收集**（而不是暂停）。
@@ -301,20 +300,24 @@ fun Bad() {
 **AI答：**
 
 1. **要解决的问题**：`lifecycleScope.launch` 只保证"**Activity 销毁时不泄漏**"，但**页面不可见（HOME 键、弹 dialog、跳转下一页）时协程仍在跑**。后果：
+
    - 后台持续发网络请求，浪费流量与电量；
    - 后台更新 UI 状态，甚至操作已不可见的界面；
    - 多个页面同时订阅同一个 Flow 时，上游被重复触发（多次请求）。
 2. **`repeatOnLifecycle(STARTED)` 的行为**：
+
    - 生命周期**到达** `STARTED`（或更高）→ **启动**内部的 `launch` 块；
    - 生命周期**低于** `STARTED`（`CREATED`）→ **取消**内部的 `launch` 块（是取消，不是挂起）；
    - 再次到达 `STARTED` → **重新启动**该块（所以里面的代码会重新执行，注意别写"只应执行一次"的初始化逻辑在块内）。
 3. **块内可以 launch 多个子协程**，它们共享生命周期；块被取消时子协程一并取消。
 4. **和 `LiveData` 的区别**：
+
    - `LiveData` 在不可见时是**暂停分发**，回到可见时**补发最新值**（所以不会丢数据）；
    - `repeatOnLifecycle` 是**取消上游**，回到可见时**重新订阅**，上游会**从头执行**（所以 Flow 若是 `flow { emit(...) }` 会重新请求）。
    - 需要"最新值不丢"时，StateFlow 因为自带**粘性**（始终有 `value`）表现得更好。
 
    > `repeatOnLifecycle` 的源码级原理（观察者注册、取消与重启时机）、与 `flowWithLifecycle` 的对比，见 [[Lifecycle]]。
+   >
 
 ---
 
