@@ -5,7 +5,7 @@ status: 待整理
 difficulty: 中级
 created: 2026-11-04
 updated: 2026-11-04
-related: "[[Lifecycle]], [[LiveData与StateFlow]], [[../架构模式/MVVM]], [[../依赖注入/Hilt]]"
+related: "[[Lifecycle]], [[LiveData与StateFlow]], [[StateFlow与SharedFlow]], [[../架构模式/MVVM]], [[../依赖注入/Hilt]]"
 ---
 # Lifecycle与ViewModel
 
@@ -381,6 +381,7 @@ sealed interface Event { data object RequestInput : Event }
 
 - [[Lifecycle]]：Lifecycle 状态机、生命周期感知协程与 `repeatOnLifecycle` 的完整拆解
 - [[LiveData与StateFlow]]：状态载体与生命周期感知
+- [[StateFlow与SharedFlow]]：`StateFlow` 管状态、`SharedFlow` 管事件的选型
 - [[../架构模式/MVVM]]：ViewModel 在 MVVM 中的角色
 - [[../依赖注入/Hilt]]：`hiltViewModel()` 的原理
 - [[../测试/单元测试]]：ViewModel 的可测试性设计

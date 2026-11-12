@@ -5,7 +5,7 @@ status: 待整理
 difficulty: 中级
 created: 2026-11-04
 updated: 2026-11-04
-related: "[[Lifecycle与ViewModel]], [[../架构模式/MVVM]], [[../架构模式/MVI]]"
+related: "[[Lifecycle与ViewModel]], [[StateFlow与SharedFlow]], [[../架构模式/MVVM]], [[../架构模式/MVI]]"
 ---
 
 # LiveData与StateFlow
@@ -378,6 +378,7 @@ val events = _events.receiveAsFlow()
 ## 关联笔记
 
 - [[Lifecycle与ViewModel]]：生命周期感知的基础
+- [[StateFlow与SharedFlow]]：`StateFlow` 与 `SharedFlow` 的语义差异与选型
 - [[../架构模式/MVVM]]：状态驱动的 ViewModel 写法
 - [[../架构模式/MVI]]：Intent 与 Effect 的通道设计
 - [[../架构模式/MVC与MVP]]：RxJava 时代 LiveData 的替代品

@@ -55,6 +55,11 @@ mindmap
         生命周期感知
         粘性 生命周期感知
         StateFlow 去重 状态容器
+      StateFlow与SharedFlow
+        StateFlow 状态 粘性 去重
+        SharedFlow 事件 广播
+        replay 缓冲 背压
+        Channel 对比
       Paging
         PagingSource
         PagingData
@@ -127,7 +132,7 @@ mindmap
 | 子目录 | 说明 | 主要笔记 |
 | --- | --- | --- |
 | [[./架构模式/MVVM\|架构模式]] | 代码组织方式与状态管理哲学 | [[./架构模式/MVC与MVP]]、[[./架构模式/MVVM]]、[[./架构模式/MVI]]、[[./架构模式/架构模式选型]] |
-| [[./Jetpack库/LiveData与StateFlow\|Jetpack库]] | 官方组件库 | [[./Jetpack库/Lifecycle与ViewModel]]、[[./Jetpack库/LiveData与StateFlow]]、[[./Jetpack库/Paging]]、[[./Jetpack库/Navigation]] |
+| [[./Jetpack库/LiveData与StateFlow\|Jetpack库]] | 官方组件库 | [[./Jetpack库/Lifecycle与ViewModel]]、[[./Jetpack库/LiveData与StateFlow]]、[[./Jetpack库/StateFlow与SharedFlow]]、[[./Jetpack库/Paging]]、[[./Jetpack库/Navigation]] |
 | [[./依赖注入/Hilt\|依赖注入]] | 对象创建与解耦 | [[./依赖注入/Dagger2]]、[[./依赖注入/Hilt]]、[[./依赖注入/Koin]] |
 | [[./测试/单元测试\|测试]] | 质量保障 | [[./测试/单元测试]]、[[./测试/UI测试]]、[[./测试/Compose测试]] |
 | [[./构建与版本管理/Gradle构建系统\|构建与版本管理]] | 构建脚本与版本适配 | [[./构建与版本管理/Gradle构建系统]]、[[./构建与版本管理/AGP与版本适配]] |
@@ -146,6 +151,7 @@ mindmap
 
 - [[Jetpack库/Lifecycle与ViewModel]]
 - [[Jetpack库/LiveData与StateFlow]]
+- [[Jetpack库/StateFlow与SharedFlow]]
 - [[Jetpack库/Paging]]
 - [[Jetpack库/Navigation]]
 

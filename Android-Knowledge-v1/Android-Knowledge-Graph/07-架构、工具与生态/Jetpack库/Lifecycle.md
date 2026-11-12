@@ -5,7 +5,7 @@ status: 待整理
 difficulty: 中级
 created: 2026-11-04
 updated: 2026-11-04
-related: "[[Lifecycle与ViewModel]], [[LiveData与StateFlow]], [[../架构模式/MVVM]]"
+related: "[[Lifecycle与ViewModel]], [[LiveData与StateFlow]], [[StateFlow与SharedFlow]], [[../架构模式/MVVM]]"
 ---
 # Lifecycle
 
@@ -519,6 +519,7 @@ viewLifecycleOwner.lifecycleScope.launch { ... }
 
 - [[Lifecycle与ViewModel]]：`Lifecycle` 管"何时活"，`ViewModel` 管"活多久"；本篇讲框架与状态机，那篇讲存活范围、`SavedStateHandle` 与依赖注入
 - [[LiveData与StateFlow]]：`observe(owner)` 与 `collectAsStateWithLifecycle()` 都是"生命周期感知的数据流"
+- [[StateFlow与SharedFlow]]：状态与事件两种载体，以及停机窗口内事件丢失的原因
 - [[../架构模式/MVVM]]：生命周期感知是 MVVM 中"单向数据流"落地的基础
 - [[../架构模式/MVI]]：`repeatOnLifecycle` 决定 State 与 SideEffect 的投递时机
 - [[../README]]：第 7 部分总览
