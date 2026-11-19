@@ -230,7 +230,7 @@ fun UserItemPreview() {
 1. **内存泄漏排查**：
    - 路径：Memory Profiler → Live Allocation → 操作页面 → **Dump heap** → 右键 hprof → **Find Retained Objects**；
    - 看什么：**Retained Size** 大的对象、**引用链**（谁持有它）→ 定位到"静态字段 / Handler / 单例集合 / 匿名内部类"。
-   - 配合 **LeakCanary** 在生产环境持续监控（见 [[../06-系统原理与性能优化/内存优化]]）。
+   - 配合 **LeakCanary** 在生产环境持续监控（见 [[../../06-系统原理与性能优化/性能优化专项/内存优化]]）。
 2. **卡顿/掉帧分析**：
    - 路径：CPU Profiler → 录制 → 看 **Frames / Frame Timeline**；
    - 看什么：主线程是否有**长任务（>16ms）**、卡顿是否集中在某个方法、是否在主线程做了 IO。
@@ -241,7 +241,7 @@ fun UserItemPreview() {
    - 路径：Energy Profiler → 看 **wakelock、CPU、后台活动**；
    - 看什么：是谁持有 WakeLock、哪个后台任务在跑、AlarmManager/JobScheduler 的唤醒频率。
 
-补充：**Network Profiler** 看接口耗时与 payload 大小（排查流量问题）；**adb + Perfetto/Systrace** 做更细的时间线分析（见 [[../06-系统原理与性能优化/卡顿优化]]）。
+补充：**Network Profiler** 看接口耗时与 payload 大小（排查流量问题）；**adb + Perfetto/Systrace** 做更细的时间线分析（见 [[../../06-系统原理与性能优化/性能优化专项/卡顿优化]]）。
 
 ---
 
@@ -297,7 +297,7 @@ fun UserItemPreview() {
 - [[ADB]]：命令行调试，是 IDE 的补充
 - [[逆向工具]]：APK 分析与反编译工具链
 - [[../构建与版本管理/Gradle构建系统]]：IDE 的构建面板与命令行等价物
-- [[../06-系统原理与性能优化/内存优化]]：Profiler 与 LeakCanary 的配合
+- [[../../06-系统原理与性能优化/性能优化专项/内存优化]]：Profiler 与 LeakCanary 的配合
 - [[../README]]：第 7 部分总览
 
 ## 参考资料

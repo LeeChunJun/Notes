@@ -208,6 +208,240 @@ fun UserRoute(vm: UserViewModel = hiltViewModel()) { ... }
 - **跨模块共享 Module**：把 Module 放在 `core` 模块，安装到 `SingletonComponent`，其他模块即可注入。
 - **AndroidManifest 合并**：Hilt 依赖 `androidx.startup` 生成的 `Hilt_AppComponent` 初始化项，多模块时需注意 manifest merger。
 
+## 代码示例
+
+### 1. 一个完整的 Hilt 工程（从零到能跑）
+
+```kotlin
+// ---- ① Application：声明依赖图的根 ----
+@HiltAndroidApp
+class MyApp : Application() {
+
+    @Inject lateinit var analytics: AnalyticsTracker   // 根组件的依赖可字段注入
+}
+
+// ---- ② Module：提供对象 ----
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+
+    @Provides
+    @Singleton
+    fun provideOkHttp(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .addInterceptor(AuthInterceptor())   // 统一鉴权
+        .build()
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(client: OkHttpClient): Retrofit = Retrofit.Builder()
+        .client(client)
+        .baseUrl(BuildConfig.API_BASE_URL)
+        .addConverterFactory(MoshiConverterFactory.create())
+        .build()
+
+    @Provides
+    @Singleton
+    fun provideUserApi(retrofit: Retrofit): UserApi =
+        retrofit.create(UserApi::class.java)
+}
+
+// ---- ③ 抽象类 Module：用 @Binds 绑定接口到实现 ----
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindUserRepository(impl: NetworkUserRepository): UserRepository
+}
+
+// ---- ④ Activity：成员注入 ----
+@AndroidEntryPoint
+class MainActivity : AppCompatActivity() {
+
+    @Inject lateinit var userApi: UserApi
+    @Inject lateinit var repo: UserRepository
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // 直接用，不需要手动构建依赖图
+    }
+}
+
+// ---- ⑤ Fragment：注意父 Fragment 必须也是 @AndroidEntryPoint ----
+@AndroidEntryPoint
+class UserFragment : Fragment() {
+    @Inject lateinit var repo: UserRepository
+}
+
+// ---- ⑥ ViewModel：@HiltViewModel 自动注入 SavedStateHandle ----
+@HiltViewModel
+class UserViewModel @Inject constructor(
+    private val repo: UserRepository,
+    private val savedState: SavedStateHandle,   // Hilt 自动提供
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(UserUiState())
+    val state: StateFlow<UserUiState> = _state.asStateFlow()
+
+    init {
+        // 进程恢复：query 是唯一 key
+        viewModelScope.launch {
+            repo.getUsers(savedState.get<String>("query").orEmpty())
+                .onSuccess { list -> _state.update { it.copy(users = list) } }
+        }
+    }
+}
+```
+
+### 2. Compose 中的 Hilt 用法
+
+```kotlin
+@Composable
+fun UserRoute(
+    viewModel: UserViewModel = hiltViewModel(),   // 从当前 ViewModelStoreOwner 取
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    Text("用户数：${state.users.size}", modifier = Modifier.clickable {
+        viewModel.refresh()
+    })
+}
+
+// Navigation Compose 场景：自动以 NavBackStackEntry 为作用域
+// 每个导航目的地有独立的 ViewModel 实例
+NavHost(navController, startDestination = "user_list") {
+    composable("user_list") { UserRoute() }
+    composable("user_detail/{id}") { backStackEntry ->
+        val vm: UserDetailViewModel = hiltViewModel(backStackEntry)
+        UserDetailScreen(vm)
+    }
+}
+```
+
+### 3. `@EntryPoint`：不改被注入类也能拿到依赖
+
+```kotlin
+// 场景：需要给第三方 SDK 初始化时注入依赖，但无法给它的类加注解
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface AnalyticsEntryPoint {
+    fun analyticsTracker(): AnalyticsTracker
+}
+
+// 在任意 @AndroidEntryPoint 类中获取（不依赖实例成员）
+object AnalyticsSdk {
+    fun init(context: Context) {
+        val entryPoint = EntryPointAccessors
+            .fromApplication(context, AnalyticsEntryPoint::class.java)
+        entryPoint.analyticsTracker().start()
+    }
+}
+
+// Activity 级别的 EntryPoint
+@EntryPoint
+@InstallIn(ActivityComponent::class)
+interface DialogEntryPoint {
+    fun dialogFactory(): DialogFactory
+}
+// 获取：
+val ep = EntryPointAccessors.fromActivity(activity, DialogEntryPoint::class.java)
+```
+
+### 4. 单测替换依赖（`@TestInstallIn`）
+
+```kotlin
+// 生产 Module
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule { /* ... */ }
+
+// 测试 Module：整体替换生产 Module
+@Module
+@TestInstallIn(
+    components = [SingletonComponent::class],
+    replaces = [NetworkModule::class]
+)
+object FakeNetworkModule {
+    @Provides
+    @Singleton
+    fun provideUserApi(): UserApi = FakeUserApi()
+}
+
+// 或只替换单个绑定（不写 Module）
+class UserRepoTest {
+    @get:Rule val hiltRule = HiltAndroidRule(this)
+
+    @BindValue
+    @JvmField
+    val fakeRepo: UserRepository = FakeUserRepository()
+
+    @Inject lateinit var repo: UserRepository
+
+    @Before fun setup() { hiltRule.inject() }
+}
+```
+
+### 5. 多模块下的 Hilt 配置
+
+```kotlin
+// core/build.gradle.kts —— 跨模块共享的 Module 放在这里
+plugins {
+    id("com.google.dagger.hilt.android")
+}
+dependencies {
+    implementation("com.google.dagger:hilt-android")
+    ksp("com.google.dagger:hilt-compiler")
+}
+
+// core/di/src/main/java/.../CoreModule.kt
+@Module
+@InstallIn(SingletonComponent::class)
+object CoreModule {
+    @Provides
+    @Singleton
+    fun provideAppConfig(): AppConfig = AppConfig()
+}
+
+// feature/order/build.gradle.kts —— 消费方只需依赖 core
+plugins {
+    id("com.google.dagger.hilt.android")
+}
+dependencies {
+    implementation(project(":core:di"))
+    ksp("com.google.dagger:hilt-compiler")
+}
+```
+
+### 6. 避免拖慢启动：懒注入
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+object SlowInitModule {
+
+    // ❌ 错误：@Singleton 的 @Provides 在 Application.onCreate 同步执行
+    @Provides
+    @Singleton
+    fun provideHeavySdk(): HeavySdk = HeavySdk.init()   // 拖慢启动
+
+    // ✅ 正确：用 Provider/Lazy 延迟到首次使用
+    @Provides
+    @Singleton
+    fun provideHeavySdk(): Provider<HeavySdk> =
+        Provider { HeavySdk.init() }     // 首次调用时才初始化
+}
+
+// 使用
+@Inject lateinit var heavySdk: Provider<HeavySdk>
+
+fun onNeedIt() {
+    val sdk = heavySdk.get()   // 此刻才初始化
+}
+```
+
 ## 常见问题 / 面试要点
 
 **读者问：Hilt 和 Dagger 是什么关系？Hilt 到底帮我们省掉了什么？**
@@ -344,7 +578,7 @@ class UserRepoTest {
    - **不要在 `@Singleton` 的 `@Provides` 里做耗时操作**（如初始化数据库、大量磁盘 IO）——把耗时初始化改成**懒加载**（用 `Provider<T>`/`Lazy<T>`）或放到后台线程；
    - **把非必要初始化延后**到真正使用时；
    - **把初始化移到 WorkManager / App Startup 的独立任务**中（androidx.startup 提供 `Initializer` 机制，可配置 `androidx.startup.InitializationProvider` 的 meta-data 做延迟初始化）。
-4. **启动优化的通用原则**（详见 [[../06-系统原理与性能优化/启动优化]]）：
+4. **启动优化的通用原则**（详见 [[../../06-系统原理与性能优化/性能优化专项/启动优化]]）：
    - **三段式初始化**：主线程只做"必须的最小初始化"，其余放到空闲时；
    - 使用 **Baseline Profile** 提前编译热点；
    - 用 `Systrace` / `Perfetto` 测量启动各阶段耗时。

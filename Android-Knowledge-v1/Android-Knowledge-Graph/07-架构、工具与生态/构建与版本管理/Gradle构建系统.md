@@ -5,7 +5,7 @@ status: 待整理
 difficulty: 中级
 created: 2026-11-04
 updated: 2026-11-04
-related: "[[AGP与版本适配]], [[../依赖注入/Hilt]], [[../08-企业级工程与运维/构建与打包优化]]"
+related: "[[AGP与版本适配]], [[../依赖注入/Hilt]], [[../../08-企业级工程与运维/构建与打包优化/构建加速]]"
 ---
 
 # Gradle构建系统
@@ -400,6 +400,627 @@ kotlin.incremental=true
 ./gradlew --scan                     # 远程构建缓存（需配置）
 ```
 
+## 代码示例
+
+### 1. settings.gradle.kts：项目入口
+
+```kotlin
+// settings.gradle.kts —— 项目根目录的第一个被执行的文件
+pluginManagement {
+    // 插件仓库（注意：插件走 gradlePluginPortal，依赖仓库在这里不生效）
+    repositories {
+        google {
+            // content 限定搜索范围：先去对的仓库找，显著加快依赖解析
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
+        mavenCentral()
+        gradlePluginPortal()      // 社区插件（KSP、Shadow 等）在这里
+    }
+}
+
+dependencyResolutionManagement {
+    // FAIL_ON_PROJECT_REPOS：禁止模块自己声明仓库 → 仓库来源统一，杜绝"仓库地狱"
+    // 其他选项：PREFER_PROJECT（默认，模块声明优先）、PREFER_SETTINGS
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        // 企业内网 Maven 仓库示例
+        // maven { url = uri("https://maven.corp.internal/repository/releases") }
+    }
+    // 版本冲突统一仲裁（避免各模块解析出不同版本）
+    versionCatalogs {
+        create("libs") {
+            from(files("gradle/libs.versions.toml"))   // 引入版本目录
+        }
+    }
+}
+
+rootProject.name = "MyApp"
+
+// 模块 include：路径用 ":" 分隔层级
+include(":app")
+include(":core:network")
+include(":core:ui")
+include(":core:model")
+include(":feature:login")
+include(":feature:profile")
+
+// 条件包含模块：只在特定条件下才创建（如仅在需要时包含 demo 模块）
+if (providers.gradleProperty("includeDemo").orNull == "true") {
+    include(":app:debug-tools")
+}
+```
+
+### 2. 根 build.gradle.kts 与 app/build.gradle.kts
+
+```kotlin
+// 根 build.gradle.kts —— 只做"全局声明"，不写具体业务配置
+plugins {
+    // apply false：只声明版本，不在根项目应用插件
+    // 子模块通过 alias(libs.plugins.xxx) 各自应用
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.hilt) apply false
+}
+
+// 根项目不产出任何产物，只做任务编排
+tasks.register<Delete>("clean") {
+    delete(rootProject.layout.buildDirectory)
+}
+```
+
+```kotlin
+// app/build.gradle.kts —— 模块级配置
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
+}
+
+android {
+    namespace = "com.example.app"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.example.app"
+        minSdk = 24
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+        viewBinding = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
+}
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(platform(libs.androidx.compose.bom))     // BOM 统一 Compose 版本
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)                                // KSP 比 KAPT 快 2~3 倍
+
+    implementation(project(":core:network"))
+    implementation(project(":core:model"))
+
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    androidTestImplementation(libs.androidx.test.espresso.core)
+}
+```
+
+### 3. gradle/libs.versions.toml：Version Catalog 完整示例
+
+```toml
+# gradle/libs.versions.toml —— 集中管理所有版本与依赖坐标
+
+[versions]
+agp = "8.7.3"
+kotlin = "2.0.21"
+ksp = "2.0.21-1.0.28"
+coreKtx = "1.15.0"
+lifecycle = "2.8.7"
+activityCompose = "1.9.3"
+composeBom = "2024.12.01"
+hilt = "2.53"
+retrofit = "2.11.0"
+okhttp = "4.12.0"
+coroutines = "1.9.0"
+room = "2.6.1"
+junit = "4.13.2"
+mockk = "1.13.13"
+
+[libraries]
+# ---- 用 version.ref 引用 [versions] 中的版本 ----
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+
+# ---- BOM：不写版本，版本由 BOM 统一 ----
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui" }
+androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
+
+# ---- 注解处理器（Hilt / Room）----
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
+# ---- 网络 ----
+retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+
+# ---- Kotlin ----
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+
+# ---- 测试 ----
+junit = { module = "junit:junit", version.ref = "junit" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+
+# ---- 别名推导：不用写 module，由别名自动推出坐标 ----
+# retrofit-alias → com.squareup.retrofit2:retrofit:2.11.0
+retrofit-alias = "com.squareup.retrofit2:retrofit"
+
+# ---- 带丰富信息的依赖（可写 group/module/version 显式指定）----
+logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okhttp" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+```
+
+```kotlin
+// 使用方式（IDE 可自动补全，libs.androidx.core.ktx 是别名转换来的）
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.retrofit.alias)          // 别名推导出来的
+    testImplementation(libs.junit)
+}
+```
+
+### 4. Convention Plugin：build-logic 约定插件
+
+```text
+build-logic/
+├── settings.gradle.kts          # build-logic 是独立构建
+├── build.gradle.kts
+└── convention/
+    ├── build.gradle.kts
+    └── src/main/kotlin/
+        ├── AndroidApplicationConventionPlugin.kt
+        ├── AndroidLibraryConventionPlugin.kt
+        └── KotlinAndroidConventionPlugin.kt
+```
+
+```kotlin
+// build-logic/settings.gradle.kts —— build-logic 独立构建，不依赖外层项目
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    versionCatalogs {
+        create("libs") {
+            from(files("../gradle/libs.versions.toml"))   // 复用主项目的版本目录
+        }
+    }
+}
+
+rootProject.name = "build-logic"
+include(":convention")
+```
+
+```kotlin
+// build-logic/convention/build.gradle.kts
+plugins {
+    `kotlin-dsl`   // 让本模块能写 Kotlin 类型的 Gradle 插件
+}
+
+group = "com.example.buildlogic"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    compileOnly(libs.android.gradlePlugin)   // 提供 AGP 的 API 类型
+    compileOnly(libs.kotlin.gradlePlugin)
+}
+
+gradlePlugin {
+    plugins {
+        // 注册插件 id：模块内用 id("convention.android.library") 引用
+        register("androidApplication") {
+            id = "convention.android.application"
+            implementationClass = "AndroidApplicationConventionPlugin"
+        }
+        register("androidLibrary") {
+            id = "convention.android.library"
+            implementationClass = "AndroidLibraryConventionPlugin"
+        }
+    }
+}
+```
+
+```kotlin
+// build-logic/convention/src/main/kotlin/AndroidLibraryConventionPlugin.kt
+// 把所有 library 模块共用的配置集中到一处
+class AndroidLibraryConventionPlugin : Plugin<Project> {
+    override fun apply(target: Project) = with(target) {
+        with(pluginManager) {
+            apply("com.android.library")          // 应用 AGP library 插件
+            apply("org.jetbrains.kotlin.android")
+        }
+
+        extensions.configure<LibraryExtension> {
+            compileSdk = 35
+            defaultConfig {
+                minSdk = 24
+                // 库模块的混淆规则由使用者继承，保证 Release 混淆不崩
+                consumerProguardFiles("consumer-rules.pro")
+            }
+            compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
+            }
+            testOptions {
+                unitTests.isIncludeAndroidResources = true
+            }
+        }
+
+        // 统一 Java 17 目标
+        extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension> {
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            }
+        }
+    }
+}
+```
+
+```kotlin
+// core/network/build.gradle.kts —— 使用约定插件后只剩业务相关内容
+plugins {
+    id("convention.android.library")
+}
+
+android {
+    namespace = "com.example.core.network"
+    buildFeatures {
+        buildConfig = true
+    }
+}
+
+dependencies {
+    implementation(libs.retrofit)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.coroutines.android)
+    // 库模块对外暴露的类型用 api，内部实现用 implementation
+    api(libs.androidx.core.ktx)
+}
+```
+
+### 5. gradle.properties 性能优化详解
+
+```properties
+# ===== ① Gradle Daemon 的 JVM 参数 =====
+# 分配堆与元空间；大型项目 Kotlin 编译很吃元空间
+# -Xmx4g：最大堆（低于 2g 极易 OOM；大项目 6g~8g）
+# -XX:MaxMetaspaceSize=1g：元空间上限
+# -Dfile.encoding=UTF-8：统一编码
+org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
+
+# ===== ② 并行构建 =====
+# 模块之间无依赖的 Task 并行执行；Worker 数默认 = CPU 核数
+org.gradle.parallel=true
+
+# ===== ③ 构建缓存 =====
+# 缓存 Task 的输出产物；切分支、CI 上未变更的 Task 显示 FROM-CACHE
+# 远程缓存需另外配置 ~/.gradle/gradle.properties 里的 buildCache.remote
+org.gradle.caching=true
+
+# ===== ④ 配置缓存（收益最大）=====
+# 缓存"配置阶段"的结果（模块列表 + Task 图），下次构建直接复用
+# 首次构建之后通常提速 30%~50%
+# 前提：build.gradle.kts 不读取外部可变状态（时间戳、随机数、网络请求）
+org.gradle.configuration-cache=true
+
+# ===== ⑤ 按需配置 =====
+# 只配置本次任务涉及的模块
+org.gradle.configureondemand=true
+
+# ===== ⑥ Kotlin 编译 =====
+kotlin.code.style=official
+kotlin.incremental=true                       # 增量编译
+kotlin.compiler.execution.strategy=daemon     # 小项目用 in-process 更快，大项目 daemon 更稳
+kotlin.daemon.jvmargs=-Xmx2g                 # Kotlin 编译守护进程独立内存
+
+# ===== ⑦ AndroidX / Jetifier =====
+android.useAndroidX=true                      # 必需
+android.enableJetifier=false                  # 迁移完就关：Jetifier 会改写每个依赖的字节码，很慢
+
+# ===== ⑧ R 类与资源 =====
+android.nonTransitiveRClass=true              # 模块只生成自己的 R 类 → 减少编译量
+android.nonFinalResIds=false                 # 资源 ID 非 final（热修复/动态资源场景需要）
+
+# ===== ⑨ 默认关闭不需要的构建特性 =====
+# 每个模块都省一点配置时间
+android.defaults.buildfeatures.buildconfig=false
+android.defaults.buildfeatures.resvalues=true
+android.defaults.buildfeatures.shaders=false
+
+# ===== ⑩ 构建速度的"命令行开关" =====
+# ./gradlew assembleDebug --parallel --build-cache --configuration-cache
+# ./gradlew assembleDebug --profile    # 生成 HTML 性能报告
+# ./gradlew assembleDebug --scan       # 上传扫描（需 Develocity 账号）
+```
+
+```bash
+# 验证三项加速是否都生效
+./gradlew help --configuration-cache
+# "Configuration cache entry reused" → 配置缓存命中（说明脚本没有不可缓存的写法）
+
+./gradlew assembleDebug --build-cache
+# 输出中出现 "FROM-CACHE" → 构建缓存命中
+
+./gradlew assembleDebug --parallel
+# 输出中 Task 并行交错执行 → 并行生效
+```
+
+### 6. 多模块依赖：api 与 implementation
+
+```text
+项目结构
+├── app            （壳工程，依赖所有 feature）
+├── core
+│   ├── model      （数据模型：纯 Kotlin，最底层）
+│   ├── network    （网络层：依赖 model）
+│   └── ui         （UI 组件库：依赖 model）
+└── feature
+    ├── login      （依赖 core:model + core:network）
+    └── profile    （依赖 core:model + core:ui）
+```
+
+```kotlin
+// core/model/build.gradle.kts —— 最底层模块
+plugins {
+    id("convention.android.library")
+}
+
+dependencies {
+    // api：对外暴露传递依赖（使用 model 的人自动拿到 kotlinx-coroutines）
+    api(libs.kotlinx.coroutines.android)
+    // implementation：只在模块内部使用，不传递给使用者
+    implementation(libs.okhttp)
+}
+```
+
+```kotlin
+// core/network/build.gradle.kts —— 中间层
+plugins {
+    id("convention.android.library")
+}
+
+dependencies {
+    // api：Retrofit 出现在本库的公开 API 签名里 → 必须用 api
+    api(libs.retrofit)
+    // implementation：OkHttp 只在实现内部使用 → 用 implementation
+    implementation(libs.okhttp)
+    implementation(project(":core:model"))
+}
+```
+
+```kotlin
+// feature/login/build.gradle.kts —— 业务层
+plugins {
+    id("convention.android.library")
+}
+
+dependencies {
+    implementation(project(":core:model"))     // model 的类型出现在公开 API 里 → 应写 api
+    implementation(project(":core:network"))
+}
+```
+
+```text
+===== api vs implementation 的判断标准（面试答这个）=====
+
+规则：看"这个依赖的类型，有没有出现在本模块对外暴露的公开 API（public 函数的参数/返回值/父类）中"
+  - 有  → 用 api      （使用者编译时需要这个类型才能调用你的方法）
+  - 没有 → 用 implementation （不暴露，减少依赖泄漏）
+
+后果：
+  - implementation 的依赖在【编译期】对使用者不可见，但在【运行期】仍在 classpath 里
+  - 于是：库用 implementation 引了 okhttp 3.x，使用者自己引了 okhttp 4.x
+    → 编译期毫无警告，运行期可能出现 NoSuchMethodError
+  → 这就是"必须用 dependencyInsight 排查版本冲突"的根本原因
+```
+
+```bash
+# 排查依赖冲突的标准命令
+./gradlew :app:dependencies --configuration releaseRuntimeClasspath
+# 输出依赖树，能看到某个库被哪几条路径引入
+
+./gradlew :app:dependencyInsight --dependency okhttp --configuration releaseRuntimeClasspath
+# 输出"谁引入了它、为什么选了这个版本、被哪个约束强制"
+```
+
+```kotlin
+// 统一版本的三种手段
+dependencies {
+    // ① constraints：约束版本（不实际引入依赖）
+    constraints {
+        implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    }
+    // ② BOM：一次性锁定一组依赖的版本
+    implementation(platform("com.squareup.okhttp3:okhttp-bom:4.12.0"))
+    // ③ exclude：排除某个传递依赖
+    implementation("com.squareup.okhttp3:okhttp") {
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
+}
+```
+
+### 7. 自定义 Task：统计 APK 体积并检查 targetSdk
+
+```kotlin
+// app/build.gradle.kts —— 自定义任务示例
+// 场景一：统计各变体 APK 体积，超过阈值就失败（防止包体积悄悄膨胀）
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        // 注册一个任务，名字 = 任务名 + 变体名
+        val reportTask = tasks.register("apkSizeReport${variant.name.replaceFirstChar { it.uppercase() }}") {
+            group = "reporting"
+            description = "统计 ${variant.name} 变体的 APK 体积并校验 targetSdk"
+
+            // 声明输入输出，让 Gradle 能正确做增量与缓存
+            val apkDir = layout.buildDirectory.dir("outputs/apk/${variant.name}")
+            val manifestReport = layout.buildDirectory.file("reports/${variant.name}-target-sdk.txt")
+            val threshold = 30 * 1024 * 1024L   // 30MB 阈值
+
+            inputs.dir(apkDir)
+            outputs.file(manifestReport)
+
+            doLast {
+                val apks = apkDir.get().asFile.listFiles { f -> f.name.endsWith(".apk") } ?: emptyList()
+                if (apks.isEmpty()) {
+                    logger.lifecycle("[${variant.name}] 未找到 APK，跳过")
+                    return@doLast
+                }
+
+                var total = 0L
+                apks.forEach { apk ->
+                    val size = apk.length()
+                    total += size
+                    logger.lifecycle("[${variant.name}] ${apk.name}: ${"%.2f".format(size / 1024.0 / 1024.0)} MB")
+                }
+                logger.lifecycle("[${variant.name}] 合计: ${"%.2f".format(total / 1024.0 / 1024.0)} MB")
+
+                // 检查 targetSdk 是否达到 Google Play 政策要求
+                val required = when {
+                    java.time.LocalDate.now().isAfter(java.time.LocalDate.of(2026, 8, 31)) -> 36
+                    java.time.LocalDate.now().isAfter(java.time.LocalDate.of(2025, 8, 31)) -> 35
+                    else -> 34
+                }
+                val current = variant.targetSdk?.apiLevel ?: 0
+                logger.lifecycle("[${variant.name}] targetSdk = $current，Play 政策要求 >= $required")
+
+                // 写报告文件
+                manifestReport.get().asFile.writeText(
+                    "variant=${variant.name}\ntotalBytes=$total\ntargetSdk=$current\nrequired=$required\n"
+                )
+
+                // 超阈值直接让构建失败
+                if (total > threshold) {
+                    throw GradleException(
+                        "[${variant.name}] APK 体积 ${total / 1024 / 1024}MB 超过阈值 ${threshold / 1024 / 1024}MB"
+                    )
+                }
+                if (current < required) {
+                    throw GradleException(
+                        "[${variant.name}] targetSdk=$current 低于 Google Play 要求的 $required"
+                    )
+                }
+            }
+        }
+
+        // 让 assemble 任务依赖我们的检查任务 → 打包完自动校验
+        tasks.named("assemble${variant.name.replaceFirstChar { it.uppercase() }}").configure {
+        }
+    }
+}
+```
+
+```kotlin
+// 更简洁的写法：独立 task + 依赖 AP 任务（演示 Task 依赖关系）
+tasks.register("checkTargetSdk") {
+    group = "verification"
+    description = "检查 manifest 中的 targetSdkVersion"
+
+    val mergedManifest = layout.buildDirectory.file("intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml")
+    inputs.file(mergedManifest).optional()
+
+    doLast {
+        val file = mergedManifest.get().asFile
+        if (!file.exists()) {
+            logger.lifecycle("manifest 尚未生成，跳过检查")
+            return@doLast
+        }
+        // 从二进制/文本 manifest 中提取 targetSdkVersion
+        val content = file.readText()
+        val match = Regex("""targetSdkVersion[\s\S]{0,40}?android:minSdkVersion="(\d+)"""").find(content)
+        val sdk = match?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        logger.lifecycle("检测到 targetSdk = $sdk")
+        if (sdk < 34) {
+            throw GradleException("targetSdk=$sdk 过低，Play 要求 >= 34")
+        }
+    }
+}
+
+// 依赖关系：checkTargetSdk 必须在打包之后跑
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    finalizedBy("checkTargetSdk")
+}
+```
+
+```bash
+# 运行自定义任务
+./gradlew :app:apkSizeReportProdRelease
+./gradlew :app:checkTargetSdk
+
+# 组合多个任务一起跑
+./gradlew :app:assembleProdRelease :app:lintVitalRelease :app:checkTargetSdk
+```
+
 ## 常见问题 / 面试要点
 
 **读者问：Gradle 的构建流程是怎样的？配置阶段和执行阶段有什么区别？**
@@ -554,8 +1175,8 @@ androidComponents {
 
 - [[AGP与版本适配]]：AGP / Gradle / JDK 版本对应关系与 targetSdk 适配
 - [[../依赖注入/Hilt]]：KSP 的典型使用场景
-- [[../08-企业级工程与运维/构建与打包优化]]：构建加速与打包优化的工程化落地
-- [[../08-企业级工程与运维/模块化与组件化]]：模块划分与 Convention Plugin
+- [[../../08-企业级工程与运维/构建与打包优化/构建加速]]：构建加速与打包优化的工程化落地
+- [[../../08-企业级工程与运维/模块化与组件化/模块划分]]：模块划分与 Convention Plugin
 - [[../README]]：第 7 部分总览
 
 ## 参考资料

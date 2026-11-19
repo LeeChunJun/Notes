@@ -198,6 +198,571 @@ llvm-readelf -l lib/arm64-v8a/libnative.so | grep LOAD
 - 未自带 native 库的纯 Kotlin/Java App 通常**无需改动**（只影响 .so 的加载）；
 - 第三方 SDK 含 .so 时需确认其已按 16KB 编译。
 
+## 代码示例
+
+### 1. 三个 SDK 版本的完整配置
+
+```kotlin
+// app/build.gradle.kts
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+}
+
+android {
+    namespace = "com.example.app"
+
+    // compileSdk：编译期使用的 API 版本（Android 15 = API 35）
+    // 它决定"你能调用哪些新 API"，与运行时行为无关
+    compileSdk = 35
+
+    defaultConfig {
+        // minSdk：最低支持的 Android 版本（Android 7.0 = API 24）
+        // 它决定"这台设备能不能装上我的 App"，升级它 = 放弃老设备用户
+        minSdk = 24
+
+        // targetSdk：你已适配的目标版本
+        // 它决定"系统会对你的 App 启用哪些行为变更"，是最需要测试的一项
+        targetSdk = 35
+
+        applicationId = "com.example.app"
+        versionCode = 1
+        versionName = "1.0.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables.useSupportLibrary = true
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"     // 与正式包共存，便于同时安装
+            isMinifyEnabled = false
+        }
+        release {
+            isMinifyEnabled = true            // 开启 R8 混淆
+            isShrinkResources = true          // 资源裁剪
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17   // AGP 8.x 要求 JDK 17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+// 三个版本的一句话总结（面试直接背）：
+// compileSdk —— "能不能写这个 API"
+// targetSdk  —— "系统怎么对你（行为变更）"
+// minSdk     —— "能不能装到这台设备上"
+```
+
+### 2. Android 14 前台服务类型：Manifest 声明 + 运行时传类型
+
+```xml
+<!-- app/src/main/AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Android 14 起：dataSync 类型的前台服务必须声明对应权限 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <application>
+        <!-- foregroundServiceType：声明这个前台服务属于哪一类
+             系统据此做权限校验与时长配额管控；
+             targetSdk 34 起不声明会直接抛 IllegalStateException -->
+        <service
+            android:name=".sync.SyncService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+    </application>
+</manifest>
+```
+
+```kotlin
+// SyncService.kt —— 运行时启动前台服务时必须带上类型
+class SyncService : Service() {
+
+    private val NOTIFICATION_ID = 1001
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // ServiceCompat.startForeground 兼容不同 API 等级：
+        // API 29+ 走三参数重载（带类型），低版本自动降级为两参数
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            buildNotification(),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,   // 与 Manifest 声明的类型一致
+        )
+
+        // Android 15：targetSdk 35 的 dataSync 服务每 24 小时最多跑 6 小时
+        // 超时系统会抛 ForegroundServiceDidNotStopInTimeException 并 ANR，
+        // 所以要主动记录启动时间，到点主动 stopForeground
+        scheduleStopAt(6 * 60 * 60 * 1000L)
+
+        return START_NOT_STICKY
+    }
+
+    private fun buildNotification(): Notification =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("正在同步数据")
+            .setSmallIcon(R.drawable.ic_sync)
+            .setPriority(NotificationCompat.PRIORITY_LOW)   // 前台服务通知必须是低优先级
+            .build()
+
+    private fun scheduleStopAt(delayMs: Long) {
+        handler.postDelayed({
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }, delayMs)
+    }
+}
+```
+
+```bash
+# 验证前台服务类型是否正确声明（面试可能让你现场查）
+aapt dump badging app-release.apk | grep -i foregroundServiceType
+# 或看完整清单
+apkanalyzer manifest print app-release.apk | grep -A3 "<service"
+```
+
+### 3. Android 15 Edge-to-Edge 适配
+
+```kotlin
+// MainActivity.kt —— Compose 版适配
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // enableEdgeToEdge()：透明化系统栏，并做好默认的图标明暗适配
+        // 需要 androidx.activity:activity-ktx:1.8+（或 1.9+）
+        enableEdgeToEdge()
+        setContent { MyApp() }
+    }
+}
+
+@Composable
+fun MyApp() {
+    // 方案一：Scaffold 层面统一处理 insets（推荐）
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets.safeDrawing,   // 安全区 = 状态栏 + 导航栏 + 输入法
+        topBar = { TopAppBar(title = { Text("首页") }) },
+    ) { padding ->
+        // padding 已包含系统栏避让，直接消费即可
+        LazyColumn(contentPadding = padding) {
+            items(list) { item ->
+                Text(item.text, Modifier.padding(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailScreen() {
+    Column(
+        // 方案二：局部用 Modifier 扩展，更灵活
+        modifier = Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()          // 只加安全区内边距
+    ) {
+        Text("详情")
+    }
+}
+
+@Composable
+fun FormWithIme() {
+    // 键盘弹出时要用 ime() 而不是 safeDrawing（safeDrawing 已含 ime，但组合更精确）
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(bottom = with(LocalDensity.current) { imeBottom.toDp() }),
+    ) {
+        // 输入框
+    }
+}
+```
+
+```kotlin
+// View 体系适配：手动处理 WindowInsets
+class DetailActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // 1) 开启 edge-to-edge
+        enableEdgeToEdge()
+        setContentView(R.layout.activity_detail)
+
+        // 2) 手动消费 insets：把系统栏尺寸转成 padding 施加给根布局
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { view, insets ->
+            // systemBars() = 状态栏 + 导航栏；displayCutout() = 刘海/挖孔
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            // 返回 insets 表示"未消费"，子 View 还能继续拿到
+            insets
+        }
+    }
+}
+```
+
+```xml
+<!-- View 体系的另一种写法：fitsSystemWindows（简单但粒度粗） -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fitsSystemWindows="true" />
+</FrameLayout>
+```
+
+```kotlin
+// 进阶：WindowInsetsAnimationCompat —— 共享元素随状态栏高度变化
+class DetailActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        // 监听 insets 动画（状态栏展开/收起），让图片高度跟着变
+        ViewCompat.setOnApplyWindowInsetsListener(binding.heroImage) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // 展开时高度 = 图片原始高度 + 状态栏高度；收起时恢复原高度
+            val expanded = insets.isVisible(WindowInsetsCompat.Type.statusBars())
+            view.layoutParams.height = if (expanded) {
+                resources.getDimensionPixelSize(R.dimen.hero_expanded_height) + bars.top
+            } else {
+                resources.getDimensionPixelSize(R.dimen.hero_collapsed_height)
+            }
+            view.requestLayout()
+            insets
+        }
+    }
+}
+```
+
+### 4. 16KB page size 的打包配置
+
+```kotlin
+// app/build.gradle.kts —— 16KB 适配所需配置
+android {
+    compileSdk = 35
+
+    // ndkVersion 必须 >= r27（r27 是首个默认对齐 16KB 的 NDK 版本）
+    ndkVersion = "27.2.12479018"
+
+    defaultConfig {
+        minSdk = 24
+        targetSdk = 35
+
+        // 关键：让 AGP 用 16KB 对齐规则打包 native 库
+        // AGP 8.5.1+ 默认可用；useLegacyPackaging = false 表示
+        // "不把 .so 压缩在 APK 里"（安装时由系统解压并按 16KB 对齐）
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+    }
+
+    packaging {
+        // jniLibs.useLegacyPackaging = false
+        //   false（推荐）：.so 不压缩，安装时对齐到 16KB → 满足 16KB 要求
+        //   true（不推荐）：.so 以压缩形式存放在 APK 内，无法保证 16KB 对齐
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            version = "3.22.1"    // CMake >= 3.22.1
+            arguments += listOf("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
+            // 该宏让 NDK 编译出的 so 支持 flexible page size
+        }
+    }
+}
+```
+
+```bash
+# ===== 16KB 适配的验证命令（面试官很可能让你现场敲）=====
+
+# ① 检查 APK 内所有 .so 是否按 16KB 对齐
+$ANDROID_HOME/build-tools/34.0.0/zipalign -c -P 16 -v app-release.apk
+# -c：只做检查不修改；-P 16：按 16KB 页大小校验；
+# 输出 "Verification Successful" 即通过
+
+# ② 检查单个 .so 的 LOAD 段对齐值（应为 0x4000 = 16KB）
+llvm-readelf -l lib/arm64-v8a/libnative.so | grep LOAD
+# 若显示 Align 是 0x1000（4KB），说明这个 so 没适配 16KB
+
+# ③ 检查 APK 里有没有原生库（纯 Kotlin/Java App 通常无需处理）
+unzip -l app-release.apk | grep -E "\.so$"
+# 无输出 = 没有 native 库 = 16KB 问题与你无关
+
+# ④ 官方校验脚本（Google 提供，遍历所有 .so）
+# bash google-verify-page-size.sh app-release.apk
+```
+
+```text
+===== 16KB 适配要点（面试口述）=====
+- 是什么：Android 15 QPR1 起部分设备用 16KB 内存页（此前 4KB）
+- 影响：只有含 .so 的 App 会因 dlopen 对齐失败而闪退
+- 条件：AGP >= 8.5.1、NDK >= r27、CMake >= 3.22.1
+- 配置：packaging.jniLibs.useLegacyPackaging = false
+- 验证：zipalign -c -P 16 -v app.apk
+- 第三方 SDK：确认其已发 16KB 兼容版本，否则等或自己重编
+```
+
+### 5. buildTypes 与 productFlavors 多渠道配置
+
+```kotlin
+// app/build.gradle.kts
+android {
+    // 声明维度（可多维，如 "environment" × "tier"）
+    flavorDimensions += listOf("environment", "tier")
+
+    productFlavors {
+        // 维度一：环境
+        create("dev") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"      // 允许与正式包共存
+            versionNameSuffix = "-dev"
+            buildConfigField("String", "BASE_URL", "\"https://dev-api.example.com\"")
+            buildConfigField("boolean", "ENABLE_LOG", "true")
+            resValue("string", "app_name", "示例Dev")
+        }
+        create("prod") {
+            dimension = "environment"
+            buildConfigField("String", "BASE_URL", "\"https://api.example.com\"")
+            buildConfigField("boolean", "ENABLE_LOG", "false")
+            resValue("string", "app_name", "示例")
+        }
+
+        // 维度二：版本层级
+        create("free") {
+            dimension = "tier"
+            // 用 resValue 覆盖资源 + 源码集实现功能裁剪
+            sourceSets["main"].res.srcDirs("src/free/res")
+        }
+        create("paid") {
+            dimension = "tier"
+            sourceSets["main"].res.srcDirs("src/paid/res")
+            buildConfigField("boolean", "PAID", "true")
+        }
+    }
+
+    buildTypes {
+        debug {
+            isMinifyEnabled = false
+            isDebuggable = true
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            // 签名从 keystore.properties 读，不硬编码在版本库里
+            val keystorePropertiesFile = rootProject.file("keystore.properties")
+            if (keystorePropertiesFile.exists()) {
+                val props = java.util.Properties().apply {
+                    keystorePropertiesFile.inputStream().use { load(it) }
+                }
+                signingConfigs {
+                    create("release") {
+                        storeFile = file(props.getProperty("storeFile"))
+                        storePassword = props.getProperty("storePassword")
+                        keyAlias = props.getProperty("keyAlias")
+                        keyPassword = props.getProperty("keyPassword")
+                    }
+                }
+            }
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true    // 使用 buildConfigField 必须打开
+    }
+}
+
+// 变体名 = BuildType × Flavor 各维度的笛卡尔积
+// 例：devFreeDebug、devFreeRelease、paidProdRelease …
+// 每个变体对应一套独立的编译与打包任务（任务名 = 任务名 + 变体名）
+```
+
+```bash
+# 查看所有变体与对应任务
+./gradlew tasks --group build
+# ./gradlew :app:assembleDevFreeDebug
+# ./gradlew :app:assembleProdPaidRelease
+# ./gradlew :app:installDevFreeDebug
+```
+
+```kotlin
+// 变体过滤：避免变体数量爆炸（面试加分点）
+androidComponents {
+    beforeVariants(selector().withBuildType("debug")) { variantBuilder ->
+        // 只保留一个 debug 变体参与构建，其余禁用 → 任务数骤减
+        variantBuilder.enable = variantBuilder.productFlavors
+            .none { it.second == "free" }
+    }
+}
+```
+
+### 6. gradle.properties 性能开关
+
+```properties
+# gradle.properties —— 构建性能开关（每项都要能说清作用）
+
+# ===== JVM 参数 =====
+# 给 Gradle Daemon 分配堆内存与元空间，避免大型项目 OOM
+# -Xmx4g：最大堆 4GB（大项目可给 6g~8g）
+# -XX:MaxMetaspaceSize=1g：元空间上限（Kotlin DSL 编译会吃元空间）
+# -Dfile.encoding=UTF-8：固定编码，避免中文注释乱码
+org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
+
+# ===== 并行构建 =====
+# 多模块之间无依赖的 Task 并行执行（Gradle Worker 数为 CPU 核数）
+org.gradle.parallel=true
+
+# ===== 构建缓存 =====
+# 缓存 Task 输出；切分支、CI 上可复用未变更 Task 的产物
+# 命中缓存的 Task 显示 "FROM-CACHE"，跳过执行
+org.gradle.caching=true
+
+# ===== 配置缓存（收益最大的一项）=====
+# 缓存"配置阶段"结果，下次构建直接复用，跳过大部分 build.gradle.kts 的执行
+# 首次构建后通常提速 30%~50%
+# 注意：脚本里不能读外部可变状态（时间戳、环境变量、网络请求）
+org.gradle.configuration-cache=true
+
+# ===== 按需配置 =====
+# 只配置本次任务涉及的模块（单模块项目收益有限，多模块明显）
+org.gradle.configureondemand=true
+
+# ===== Kotlin 相关 =====
+kotlin.code.style=official           # Kotlin 官方代码风格
+kotlin.incremental=true              # 增量编译
+# 小项目 in-process 更快；大项目 daemon 更稳（避免频繁启停）
+kotlin.compiler.execution.strategy=daemon
+# 升级 Kotlin 2.0+ 后 K1/K2 前端统一时用 K2
+kotlin.useK2=true
+
+# ===== AndroidX / Jetifier =====
+android.useAndroidX=true             # 启用 AndroidX（必需）
+# 旧 support 库迁移到 AndroidX 的工具。
+# 依赖已全部迁完就应该关掉它 —— Jetifier 会扫描每个依赖并改写字节码，明显拖慢构建
+android.enableJetifier=false
+
+# ===== R 类与资源 ID =====
+# 每个模块只生成自己的 R 类（传递依赖不再生成 R）→ 减少编译产物、加快增量编译
+android.nonTransitiveRClass=true
+# 资源 ID 编译期不再是 final（配合动态资源/热修复时需要）
+android.nonFinalResIds=false
+
+# ===== 构建行为 =====
+# 依赖统一在一个模块用注解生成，避免每模块生成重复的 BuildConfig
+android.defaults.buildfeatures.buildconfig=false
+android.defaults.buildfeatures.resvalues=true
+android.defaults.buildfeatures.shaders=false
+```
+
+```bash
+# 验证配置缓存是否真的生效
+./gradlew help --configuration-cache
+# 输出 "Configuration cache entry reused" 表示命中（复用成功）
+# 输出 "Configuration cache entry stored" 表示本次已写入缓存（第一次会慢一点）
+
+# 用 --configuration-cache-problems=warn 只警告不报错，方便排查不兼容写法
+./gradlew assembleDebug --configuration-cache-problems=warn
+```
+
+### 7. Lint 对 targetSdk 问题的告警配置
+
+```kotlin
+// app/build.gradle.kts
+android {
+    lint {
+        // 只在 release 构建跑 lint（debug 跑太慢）
+        checkReleaseBuilds = true
+
+        // 构建中断策略：
+        //   true  = 有 error 就中断构建（CI 强制卡质量）
+        //   false = 只出报告不中断（本地开发友好）
+        abortOnError = true
+
+        // 只在 CI 上 fatal，本地只警告
+        val isCi = System.getenv("CI") == "true"
+        abortOnError = isCi
+
+        // 致命级别：只有 Error 级别才中断（Warning 不挡构建）
+        fatalOnly = true
+
+        // 告警级别：把特定问题升到 Error（targetSdk 相关必配）
+        warning += setOf(
+            "ExpiredTargetSdkVersion",      // targetSdk 低于 Play 政策要求
+            "OldTargetApi",                 // 用了已过时的 targetSdk
+            "InlineApi",                    // 危险 API（如 getIdentifier）
+        )
+        error += setOf(
+            "ExpiredTargetSdkVersion",      // 升级为 Error：卡住不合规的发布
+            "ForegroundServicePermission",  // Android 14 前台服务类型/权限缺失
+            "ForegroundServiceType",        // foregroundServiceType 未声明
+            "UnsafeImplicitIntentLaunch",   // 隐式 Intent 启动导出组件
+            "BatteryLife",                  // 明显的电量问题（如后台轮询）
+        )
+
+        // 关闭不关心的检查（减少噪声）
+        disable += setOf(
+            "GradleDependency",             // 依赖版本过时（我们用 Catalog 统一管理）
+            "OldTargetApi",                 // 与上面的 warning 冲突，取其一
+            "TypographyEllipsis",           // UI 文案规范
+        )
+
+        // 基线文件：把存量问题记下来，只关注新增问题
+        // baseline = file("lint-baseline.xml")
+        // baseline += "lint-baseline.xml"
+        checkDependencies = true
+    }
+}
+```
+
+```xml
+<!-- lint-baseline.xml（片段）—— 已修复/暂时接受的问题记在这里，新问题不会被吞掉 -->
+<issues format="6" by="lint 8.7.3">
+    <issue
+        id="ExpiredTargetSdkVersion"
+        severity="warning"
+        message="The value of targetSdkVersion (33) is too low.">
+        <location
+            file="build.gradle.kts"
+            line="12"
+            column="9" />
+    </issue>
+</issues>
+```
+
+```bash
+# 生成报告（HTML 可视化）
+./gradlew :app:lintRelease
+# 报告位置：app/build/reports/lint-results-release.html
+
+# 只跑与 targetSdk / API 相关的检查
+./gradlew :app:lintRelease -Pandroid.experimental.lint.missingBaselineIsEmptyBaseline=true
+
+# CI 里以文本形式输出，便于日志留存
+./gradlew :app:lintVitalRelease   # release 上只跑致命级检查（Play 商店上传也会跑）
+```
+
 ## 常见问题 / 面试要点
 
 **读者问：`compileSdk`、`targetSdk`、`minSdk` 有什么区别？升级哪个会影响用户？**
@@ -325,8 +890,8 @@ llvm-readelf -l lib/arm64-v8a/libfoo.so | grep LOAD
 
 - [[Gradle构建系统]]：AGP 在 Gradle 中的位置与配置
 - [[../基础工具链/AndroidStudio]]：SDK Manager 与模拟器版本管理
-- [[../06-系统原理与性能优化/权限机制]]：权限机制的深入
-- [[../08-企业级工程与运维/构建与打包优化]]：多渠道打包与包体积优化
+- [[../../06-系统原理与性能优化/系统核心机制/权限机制]]：权限机制的深入
+- [[../../08-企业级工程与运维/构建与打包优化/构建加速]]：多渠道打包与包体积优化
 - [[../README]]：第 7 部分总览
 
 ## 参考资料

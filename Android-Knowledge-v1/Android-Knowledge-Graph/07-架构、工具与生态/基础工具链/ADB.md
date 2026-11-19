@@ -268,6 +268,205 @@ echo "已生成: $OUT"
 adb shell dumpsys package com.example.app | grep -i -E "pkgFlags|DEXOPT|hidden"
 ```
 
+## 代码示例
+
+### 1. 基本操作：连接、安装、启动
+
+```bash
+# ===== 设备连接 =====
+adb devices -l                              # 列出设备；-l 追加 product/model/device 等详细信息
+adb -s emulator-5554 shell                 # 多设备时用 -s <serial> 指定目标设备
+adb connect 192.168.1.100:5555             # 无线调试：连接（需先 adb pair 完成配对）
+adb pair 192.168.1.100:37000               # 无线调试：配对，终端会提示输入 6 位配对码
+adb tcpip 5555                             # 老式网络调试：把 adbd 切到 TCP 模式（5555 是 adbd 监听端口）
+
+# ===== 安装 / 卸载 =====
+adb install -r -t app-debug.apk            # -r 覆盖安装保留数据；-t 允许安装 testOnly 包（debug APK 必须加）
+adb install -r -d app-release.apk          # -d 允许版本降级（versionCode 更小时）
+adb install-multiple base.apk split_a.apk # 安装 split APK（分模块安装）
+adb uninstall com.example.app              # 完全卸载（会清数据）
+adb uninstall -k com.example.app           # 卸载但保留 data 与 cache 目录
+
+# ===== 启动组件 =====
+adb shell am start -n com.example.app/.MainActivity
+# -n <component>：显式指定「包名/类名」，比隐式 Intent 更精确，面试时优先用这个
+adb shell am start -W -n com.example.app/.MainActivity
+# -W：等待 Activity 真正 resumed 才返回，并输出 ThisTime/TotalTime/WaitTime，用于测冷启动耗时
+adb shell am start -a android.intent.action.VIEW -d "https://example.com"
+# -a action + -d data：构造隐式 Intent（等价于 ADB 中模拟一条系统 Intent）
+adb shell am start -n com.example.app/.MainActivity --es name "Tom" --ei age 18
+# --es <key> <value> 传字符串；--ei 传 int；--el 传 long；--ef 传 float；--ez 传 boolean
+adb shell am force-stop com.example.app     # 杀进程（等价"强停"），用于复现冷启动问题
+adb shell am kill com.example.app           # 只杀后台进程（保留前台），比 force-stop 温和
+adb shell am broadcast -a com.example.ACTION_SYNC -p com.example.app
+# -a action，-p 限定接收包名（比 -n 更安全的定向广播写法）
+adb shell am startservice -n com.example.app/.SyncService   # 启动 Service
+```
+
+### 2. logcat 过滤：面试最常被要求现场敲的命令
+
+```bash
+# ===== 按 Tag 过滤 =====
+adb logcat -s MyTag                       # -s 等价于 --tag，只显示该 Tag（等价 adb logcat MyTag:I *:S）
+adb logcat -s MyTag:I MyOtherTag:W        # 多 Tag + 指定级别：I=Info，W=Warning
+adb logcat "MyTag:V"                      # 冒号写法，等价上面，* 表示所有 Tag
+
+# ===== 格式与级别 =====
+adb logcat -v time                        # -v 输出格式：time(时间) / threadtime(时间+线程+PID+TID，最常用)
+adb logcat -v threadtime *:E              # 只看 Error 及以上（*:E 是「所有 Tag 的 E 级别」）
+adb logcat -v brief                       # 精简格式，只输出 tag/level/message
+
+# ===== grep 二次过滤（真机常用）=====
+adb logcat -v time | grep -i "timeout"   # 按关键字过滤（-i 忽略大小写）
+adb logcat -v time | grep -E "FATAL|ANR in"   # 多关键字用 -E（扩展正则）
+
+# ===== 按进程过滤 =====
+adb logcat --pid=$(adb shell pidof com.example.app)
+# 用 pidof 拿到目标进程 PID，只看该进程日志（避免全量日志刷屏，最推荐的方式）
+
+# ===== 缓冲区 =====
+adb logcat -b crash                       # -b crash：只看崩溃缓冲区（Java 崩溃堆栈都在这里）
+adb logcat -b all                         # 所有缓冲区：main/crash/system/radio/events
+adb logcat -d                             # -d = dump，打印历史缓冲后退出（默认是持续输出流）
+
+# ===== 清理与落盘 =====
+adb logcat -c                             # -c = clear，清空缓冲区（复现问题前必做）
+adb logcat -v threadtime > /tmp/crash.log # 重定向到文件（Windows 下用 Ctrl+C 结束）
+```
+
+### 3. dumpsys 系列：线上问题的"取证快照"
+
+```bash
+# ===== 内存 =====
+adb shell dumpsys meminfo com.example.app
+# 看 PSS / Native Heap / Dalvik Heap / View Size / App Summary；Native 异常高→图片/编解码泄漏，Dalvik 高→Java 对象堆积
+adb shell dumpsys meminfo                   # 不带包名：查看系统整体内存与各进程占用
+
+# ===== 渲染/掉帧 =====
+adb shell dumpsys gfxinfo com.example.app framestats
+# framestats 输出逐帧耗时（>16.6ms 为掉帧），可离线统计 Janky frames 比例
+
+# ===== 电量 =====
+adb shell dumpsys batterystats --charged
+# 统计各 App 的 wakelock、唤醒次数、CPU 时间；排查"App 耗电高"的标准手段
+
+# ===== Activity 栈 =====
+adb shell dumpsys activity activities        # 完整任务栈（TaskRecord / ActivityRecord）
+adb shell dumpsys activity top               # 当前前台 Activity 的详情（最常用）
+adb shell dumpsys activity exit-info com.example.app
+# 历史退出原因：EXIT_REASON_ANR / EXIT_REASON_CRASH / REASON_USER_REQUESTED / lowmem，一目了然
+
+# ===== 其他 =====
+adb shell dumpsys package com.example.app   # 包信息、权限授予状态、dex 优化状态
+adb shell dumpsys window                     # 窗口与焦点，排查白屏/弹窗遮挡
+adb shell dumpsys power                      # 唤醒锁、电源状态
+adb shell dumpsys deviceidle                 # Doze 状态，判断是否被后台限制
+adb shell dumpsys jobscheduler               # JobScheduler 任务状态
+```
+
+### 4. pm 包管理与权限
+
+```bash
+# ===== 包信息 =====
+adb shell pm list packages                   # 列出所有包名
+adb shell pm list packages | grep myapp      # grep 过滤目标包
+adb shell pm path com.example.app            # 输出 APK 安装路径（可配合 adb pull 抓取）
+adb shell pm dump com.example.app | grep -i version   # 查看 versionName/versionCode
+
+# ===== 权限授予 / 撤销 =====
+adb shell pm grant com.example.app android.permission.CAMERA
+# 直接授予运行时权限（省去手动点弹窗），调试相机/定位最常用
+adb shell pm revoke com.example.app android.permission.CAMERA
+adb shell pm reset-permissions com.example.app          # 重置该 App 的所有运行时权限
+
+# ===== 调试与优化（只读，风险低）=====
+adb shell pm list packages -d                # -d 只列已禁用（disabled）的包
+adb shell pm trim-caches 999999999           # 清理所有缓存文件，模拟"长期不用"的状态
+```
+
+### 5. 截图、录屏与端口转发
+
+```bash
+# ===== 截图（不落设备盘，直接流到本地）=====
+adb exec-out screencap -p > screen.png
+# exec-out = 执行后把二进制 stdout 原样输出，-p 指定 PNG 格式；比 screencap + pull 更快
+adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png ./
+
+# ===== 录屏 =====
+adb shell screenrecord --time-limit 30 --bit-rate 4000000 /sdcard/screen.mp4
+# --time-limit 最长录制秒数；--bit-rate 码率（越大越清晰，默认较小）；Ctrl+C 可提前结束
+adb pull /sdcard/screen.mp4 ./
+
+# ===== 端口转发：抓包与本地联调 =====
+adb forward tcp:8888 tcp:8888                # 主机 8888 → 设备 8888：App 访问 localhost:8888 即打到主机抓包代理
+adb forward --list                           # 查看现有转发规则
+adb forward --remove tcp:8888                # 删除单条规则
+adb forward --remove-all                     # 清理全部
+adb reverse tcp:3000 tcp:3000                # 设备 3000 → 主机 3000：手机里的 App 反向访问主机服务
+adb reverse --list
+
+# 系统级代理（配合 Charles/mitmproxy 使用）
+adb shell settings put global http_proxy 10.0.2.2:8888   # 10.0.2.2 是模拟器访问宿主机的固定别名
+adb shell settings put global http_proxy :0              # 关闭代理
+```
+
+### 6. 完整脚本：排查一次线上闪退
+
+```bash
+#!/usr/bin/env bash
+# ============================================================
+# crash_probe.sh —— 现场取证脚本：一次跑完崩溃排查所需的所有证据
+# 用法：./crash_probe.sh com.example.app
+# 设计思路：先分类（ANR/崩溃/内存/被杀），再抓细节，最后留证
+# ============================================================
+set -uo pipefail
+
+PKG="${1:-com.example.app}"                 # $1 为包名；默认值避免忘传参数直接报错
+OUT="diagnostics_$(date +%Y%m%d_%H%M%S)"    # 带时间戳的输出目录，避免多次运行互相覆盖
+mkdir -p "$OUT"
+
+echo "==> 采集目标：$PKG，输出目录：$OUT"
+
+# 1) 先清空日志缓冲，保证下面抓到的是"本次复现"的日志，而不是历史噪音
+adb logcat -c
+
+# 2) 崩溃缓冲区：Java 崩溃的 FATAL EXCEPTION 与堆栈在这里
+adb logcat -b crash -d -v threadtime > "$OUT/crash_buffer.txt"
+
+# 3) 主日志：threadtime 格式带时间戳+线程+PID，便于还原时序
+adb logcat -d -v threadtime > "$OUT/logcat.txt"
+
+# 4) 历史退出原因：一眼区分是 ANR / 崩溃 / lowmem / 用户手动强停
+adb shell dumpsys activity exit-info "$PKG" > "$OUT/exit_info.txt"
+
+# 5) 内存快照：判断是 Java 侧堆积还是 native 泄漏
+adb shell dumpsys meminfo "$PKG" > "$OUT/meminfo.txt"
+
+# 6) 前台现场：崩溃发生时用户停在哪个页面、哪个 Fragment
+adb shell dumpsys activity top > "$OUT/activity_top.txt"
+
+# 7) 渲染统计：顺便看有没有掉帧
+adb shell dumpsys gfxinfo "$PKG" framestats > "$OUT/gfxinfo.txt"
+
+# 8) 包信息：版本号、权限、dex 状态（判断是否设备侧 OOM 或被系统优化）
+adb shell dumpsys package "$PKG" > "$OUT/package.txt"
+
+# 9) 完整诊断包：包含全部缓冲区 + ANR traces + 内存快照，可直接发给开发
+adb bugreport "$OUT/bugreport.zip"
+
+# ---- 现场结论速览：把关键信号 grep 出来，避免翻大文件 ----
+echo "==> 崩溃信号："
+grep -m 5 -E "FATAL EXCEPTION|ANR in|Watchdog" "$OUT/logcat.txt" || echo "   (未发现 Java 崩溃/ANR 信号)"
+
+echo "==> 退出原因："
+grep -m 5 -E "REASON_|EXIT_REASON" "$OUT/exit_info.txt" || echo "   (无退出记录)"
+
+echo "==> 异常堆栈片段："
+grep -m 10 -E "Caused by|at [a-zA-Z]+\.[a-zA-Z]+\(" "$OUT/crash_buffer.txt" || echo "   (崩溃缓冲区为空)"
+
+echo "==> 诊断包已生成：$OUT/bugreport.zip"
+```
+
 ## 常见问题 / 面试要点
 
 **读者问：ADB 的工作原理是什么？为什么 `adb shell` 能执行系统命令？**
@@ -395,12 +594,53 @@ adb shell dumpsys package com.example.app | grep -i -E "pkgFlags|DEXOPT|hidden"
    - **代理未生效**：部分 App 忽略系统代理（`ProxySelector` 被改写）→ 需要 VPN 模式抓包（PCAPdroid、HttpCanary）。
 4. **面试加分**：能说明"**这套配置只能进 debug 构建**，release 里信任用户 CA 等于打开了中间人攻击的门"。
 
+---
+
+**读者问：CI / 自动化测试里怎么用 ADB？和本地手动操作有什么不一样？**
+
+**AI答：**
+
+1. **核心差异：设备是无状态的**。CI 每次跑在全新的机器/容器里，设备可能不存在、可能掉线、可能卡在开机动画 → **不能假设"设备已经连上了"**，必须**显式准备（provision）+ 显式回收（teardown）**。
+2. **准备阶段（最容易被忽略的一段）**：
+   ```bash
+   adb wait-for-device                      # 阻塞等待设备出现，避免"设备还没连上就开始装包"
+   # 循环等待 boot_completed，避免装完包发现还在开机
+   until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 1; done
+   adb shell settings put global window_animation_scale 0.0   # 关动画，去掉 CI 上的随机抖动
+   ```
+   `adb wait-for-device` 是 CI 里性价比最高的一行命令——它把"设备还没枚举出来"的竞态问题一次性解决。
+3. **执行阶段的标准动作**（每个 case 的固定序列）：
+   ```bash
+   adb install -r -t app-debug.apk            # 覆盖安装保留数据（-t 必须加，否则 debug 包装不上）
+   adb shell am force-stop com.example.app    # 每次 case 前杀进程，保证状态干净
+   adb shell pm clear com.example.app         # 需要"全新安装态"时才用（会清数据！）
+   adb logcat -c                              # 清空日志缓冲，否则日志断言会匹配到上一个 case 的残留
+   adb shell am start -W -n com.example.app/.MainActivity   # -W 等启动完成并输出耗时
+   ```
+   **关键**：日志断言（Espresso/UIAutomator 的 logcat 断言）**必须先 `logcat -c`**，否则会读到历史日志造成"假通过/假失败"。
+4. **多设备并行**：CI 上用**一台物理机 + 多个模拟器**做并行，**每条命令都要带 `-s <serial>`**（用 `adb devices` 拿到 serial），否则命令会随机落到某台设备上 → **测试之间互相串扰**，这类问题在本地单机永远复现不了，上了 CI 才炸。
+5. **产物收集（决定 CI 出问题时能不能查）**：
+   ```bash
+   adb logcat -d -v threadtime > artifacts/logcat.txt
+   adb shell dumpsys meminfo com.example.app > artifacts/meminfo.txt
+   adb shell dumpsys activity exit-info com.example.app > artifacts/exit_info.txt
+   adb exec-out screencap -p > artifacts/screen.png      # 失败时截图，比日志直观
+   adb bugreport artifacts/bugreport.zip
+   ```
+   **坑**：用 `adb shell screencap -p /sdcard/x.png && adb pull` 拿截图在某些 CI 环境会被 CRLF 转换破坏 PNG，**`adb exec-out screencap -p > x.png` 才是二进制安全的**。
+6. **常见坑清单**：
+   - **设备掉线（offline/unauthorized）**：`adb kill-server && adb start-server` 重连；无线调试的**配对端口每次都变**，不能硬编码 → CI 里改用 `adb tcpip 5555` + 固定 IP，或直接用 USB 设备池。
+   - **并发 adb server 抢锁**：同一个 `~/.android/adbkey` 在多容器里共享会冲突 → 每个 job 用独立的 `ANDROID_VENDOR_KEYS` 或独立容器。
+   - **安装超时**：`adb install` 超过 60s 常见于 dex 优化（`INSTALL_FAILED_TIMEOUT`）→ CI 里用 `-r` + 预热，或在设备上关 dexopt。
+   - **重定向到的是设备不是主机**：`adb shell cmd > out.txt` 是**主机**重定向；`adb shell "cmd > /sdcard/out.txt"` 才是写设备文件——CI 里常见的错误是把日志写到了设备上，导致 artifacts 目录里什么都没有。
+7. **面试话术**："**CI 里用 ADB 的核心是'设备无状态'**：先用 `adb wait-for-device` + 等 `sys.boot_completed` 消除启动竞态，每个 case 前 `force-stop` + `logcat -c` 保证状态干净，所有命令带 `-s serial` 支持多设备并行，最后统一收集 logcat/dumpsys/截图/bugreport 作为产物。另外 `adb exec-out screencap -p` 比 `shell screencap + pull` 更可靠，因为它是二进制安全的。**"
+
 ## 关联笔记
 
 - [[AndroidStudio]]：图形化调试与 Profiler
 - [[逆向工具]]：APK 分析、Frida、Hook 与抓包
-- [[../06-系统原理与性能优化/内存优化]]：内存与 ANR 的排查工具
-- [[../08-企业级工程与运维/日志与监控]]：线上日志与崩溃采集体系
+- [[../../06-系统原理与性能优化/性能优化专项/内存优化]]：内存与 ANR 的排查工具
+- [[../../08-企业级工程与运维/日志与监控/日志系统]]：线上日志与崩溃采集体系
 - [[../README]]：第 7 部分总览
 
 ## 参考资料
